@@ -9,6 +9,22 @@ Kategori: **Baru** (fitur baru) · **Ubah** (perubahan perilaku) · **Perbaikan*
 
 ---
 
+## 2026-10-17 — Sinkron HRIS otomatis tiap jam
+
+### Baru
+- **Sinkron karyawan dari HRIS otomatis** (bawaan tiap 60 menit, atur lewat `HRIS_SYNC_INTERVAL_MINUTES`, 0 = mati). Tombol **Sinkron Sekarang** dan Dry-run tetap ada.
+- Halaman Sinkron HRIS menampilkan kapan sinkron terakhir berjalan, hasilnya, dan galat terakhir.
+
+### Ubah
+- Batas waktu permintaan ke HRIS 60 -> 300 detik; sinkron manual dan otomatis tidak bisa berjalan bersamaan (bergantian).
+- Kontainer web dapat menjangkau HRIS di server yang sama lewat `host.docker.internal`.
+
+### Deploy
+- Tanpa migrasi.
+- Isi `HRIS_API_URL` dan `HRIS_API_TOKEN` di `.env` server (token sama dengan `HRIS_API_TOKEN` di HRIS), lalu `up --build -d`.
+
+---
+
 ## 2026-10-08 — Password Riwayat Saya & Pengisian FTW per Section
 
 ### Baru

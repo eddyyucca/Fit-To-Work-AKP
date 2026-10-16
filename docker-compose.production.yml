@@ -27,6 +27,11 @@ services:
       ConnectionStrings__DefaultConnection: "Server=${DB_SERVER};Database=${DB_NAME};User Id=${DB_USER};Password=${DB_PASSWORD};TrustServerCertificate=True;"
       HRIS_API_URL: "${HRIS_API_URL:-}"
       HRIS_API_TOKEN: "${HRIS_API_TOKEN:-}"
+      # Sinkron karyawan dari HRIS otomatis tiap sekian menit (0 = mati). Tombol manual di menu admin tetap ada.
+      HRIS_SYNC_INTERVAL_MINUTES: "${HRIS_SYNC_INTERVAL_MINUTES:-60}"
+    extra_hosts:
+      # Agar kontainer bisa menjangkau HRIS yang berjalan di server yang sama (HRIS_API_URL=http://host.docker.internal:8101)
+      - "host.docker.internal:host-gateway"
     ports:
       # Hanya bisa diakses dari server ini sendiri (cloudflared). Dari LAN / internet wajib lewat Cloudflare Tunnel.
       - "127.0.0.1:${APP_PORT:-8080}:8080"

@@ -51,7 +51,7 @@ namespace FitToWorkApp.Services
     public interface IHrisEmployeeSync
     {
         bool IsConfigured { get; }
-        Task<HrisSyncResult> RunAsync(bool dryRun, CancellationToken ct = default);
+        Task<HrisSyncResult> RunAsync(bool dryRun, CancellationToken ct = default, string trigger = "manual");
     }
 
     public class HrisEmployeeSync : IHrisEmployeeSync
@@ -86,9 +86,14 @@ namespace FitToWorkApp.Services
         private readonly IDbConnectionFactory _connectionFactory;
         private readonly string _apiUrl;
         private readonly string _apiToken;
+        private readonly HrisSyncStatus _status;
 
-        public HrisEmployeeSync(IHttpClientFactory httpClientFactory, IDbConnectionFactory connectionFactory, IConfiguration configuration)
+        // Satu sinkronisasi pada satu waktu (otomatis tiap jam dan tombol manual tidak boleh saling menimpa).
+        private static readonly SemaphoreSlim Gate = new(1, 1);
+
+        public HrisEmployeeSync(IHttpClientFactory httpClientFactory, IDbConnectionFactory connectionFactory, IConfiguration configuration, HrisSyncStatus status)
         {
+            _status = status;
             _httpClientFactory = httpClientFactory;
             _connectionFactory = connectionFactory;
             _apiUrl = (configuration["HRIS_API_URL"] ?? string.Empty).Trim().TrimEnd('/');
@@ -97,7 +102,30 @@ namespace FitToWorkApp.Services
 
         public bool IsConfigured => _apiUrl.Length > 0 && _apiToken.Length > 0;
 
-        public async Task<HrisSyncResult> RunAsync(bool dryRun, CancellationToken ct = default)
+        public async Task<HrisSyncResult> RunAsync(bool dryRun, CancellationToken ct = default, string trigger = "manual")
+        {
+            if (!IsConfigured)
+                throw new HrisSyncException("HRIS belum dikonfigurasi. Isi HRIS_API_URL dan HRIS_API_TOKEN di environment aplikasi.");
+
+            await Gate.WaitAsync(ct);
+            try
+            {
+                var result = await RunCoreAsync(dryRun, ct);
+                if (!dryRun) _status.RecordSuccess(trigger, result);
+                return result;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                if (!dryRun) _status.RecordFailure(trigger, ex.Message);
+                throw;
+            }
+            finally
+            {
+                Gate.Release();
+            }
+        }
+
+        private async Task<HrisSyncResult> RunCoreAsync(bool dryRun, CancellationToken ct)
         {
             if (!IsConfigured)
                 throw new HrisSyncException("HRIS belum dikonfigurasi. Isi HRIS_API_URL dan HRIS_API_TOKEN di environment aplikasi.");
@@ -204,7 +232,7 @@ namespace FitToWorkApp.Services
         private async Task<List<HrisEmployee>> FetchAllAsync(CancellationToken ct)
         {
             var client = _httpClientFactory.CreateClient(HttpClientName);
-            client.Timeout = TimeSpan.FromSeconds(60);
+            client.Timeout = TimeSpan.FromSeconds(300);   // HRIS besar atau jaringan lambat: beri waktu lebih lama
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

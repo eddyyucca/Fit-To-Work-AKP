@@ -46,6 +46,8 @@ builder.Services.AddScoped<IEmployeeImportRepository, EmployeeImportRepository>(
 builder.Services.AddScoped<IEmployeeDeviceLogin, EmployeeDeviceLogin>();
 builder.Services.AddHttpClient(HrisEmployeeSync.HttpClientName);
 builder.Services.AddScoped<IHrisEmployeeSync, HrisEmployeeSync>();
+builder.Services.AddSingleton<HrisSyncStatus>();
+builder.Services.AddHostedService<HrisAutoSyncService>();
 
 var keysPath = builder.Configuration["App:DataProtectionKeysPath"]
     ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");

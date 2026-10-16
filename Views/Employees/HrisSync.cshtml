@@ -1,4 +1,6 @@
 @model FitToWorkApp.Services.HrisSyncResult?
+@inject FitToWorkApp.Services.HrisSyncStatus SyncStatus
+@inject FitToWorkApp.Services.IAppClock Clock
 @{
     ViewData["Title"] = "Sinkron Karyawan dari HRIS";
     Layout = "_AdminLayout";
@@ -8,6 +10,31 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0">Sinkron Karyawan dari HRIS</h4>
     <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Kembali</a>
+</div>
+
+@{
+    var st = SyncStatus.Snapshot();
+    string Local(DateTime? utc) => utc is null ? "-" : Clock.ToLocal(DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc)).ToString("dd MMM yyyy HH:mm:ss");
+}
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-3 px-4 small">
+        <div class="fw-semibold mb-1">Sinkron otomatis</div>
+        @if (SyncStatus.IntervalMinutes > 0)
+        {
+            <div>Berjalan otomatis setiap <strong>@SyncStatus.IntervalMinutes menit</strong>. Tombol di bawah tetap bisa dipakai kapan saja.</div>
+        }
+        else
+        {
+            <div class="text-muted">Sinkron otomatis dimatikan (HRIS_SYNC_INTERVAL_MINUTES=0). Gunakan tombol di bawah.</div>
+        }
+        <div class="mt-1">Terakhir dijalankan: <strong>@Local(st.run)</strong>@(st.trigger is null ? "" : $" ({st.trigger})")</div>
+        <div>Terakhir berhasil: <strong>@Local(st.success)</strong>@(st.summary is null ? "" : " - " + st.summary)</div>
+        @if (st.error is not null)
+        {
+            <div class="text-danger mt-1">Percobaan terakhir gagal: @st.error</div>
+        }
+        <div class="text-muted mt-1">Catatan: status ini hanya mencatat sejak aplikasi terakhir dinyalakan.</div>
+    </div>
 </div>
 
 <div class="card shadow-sm mb-4">
