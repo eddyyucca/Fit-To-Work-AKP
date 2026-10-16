@@ -1,0 +1,33 @@
+version: "3.9"
+
+# Dipakai kalau SQL Server SUDAH ADA (bukan yang di-spin up lewat Docker) -
+# entah itu server fisik/VM terpisah, instance existing di jaringan kantor,
+# atau SQL Server yang jalan langsung di mesin host (bukan di container lain).
+#
+# Cara pakai:
+#   docker compose -f docker-compose.external-db.yml up --build -d
+#
+# Sebelum itu, ganti ConnectionStrings__DefaultConnection di bawah sesuai
+# server Anda, dan pastikan schema.sql sudah dijalankan sekali di database
+# tersebut (lihat README-Docker.md bagian "Konek ke SQL Server yang sudah ada").
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fittowork-web
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      # Ganti host, database, user, dan password sesuai server existing Anda.
+      # - Kalau SQL Server ada di mesin HOST yang sama (di luar Docker), pakai "host.docker.internal" sebagai Server.
+      # - Kalau SQL Server ada di server/VM lain di jaringan, pakai IP/hostname server itu langsung.
+      ConnectionStrings__DefaultConnection: "Server=YOUR_SQL_SERVER_HOST,1433;Database=FitToWorkDb;User Id=YOUR_DB_USER;Password=YOUR_DB_PASSWORD;TrustServerCertificate=True;"
+    ports:
+      - "8080:8080"
+    # Baris ini WAJIB ada kalau menjalankan di Linux dan SQL Server ada di mesin host yang sama
+    # (supaya nama "host.docker.internal" bisa di-resolve). Di Docker Desktop (Windows/Mac) ini
+    # sudah otomatis tersedia, tapi menambahkan baris ini tetap aman/tidak mengganggu.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

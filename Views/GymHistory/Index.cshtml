@@ -1,0 +1,135 @@
+@{
+    ViewData["Title"] = "Riwayat Aktivitas";
+    Layout = "_AdminLayout";
+    var departments = (List<string>)ViewBag.Departments;
+    var positions = (List<string>)ViewBag.Positions;
+    var types = (List<ActivityType>)ViewBag.Types;
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+    #gymTable td { vertical-align: middle; }
+    .dataTables_processing { background: rgba(255,255,255,.85) !important; border: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Riwayat Aktivitas Kebugaran</h4>
+        <div class="small mt-1"><span class="badge text-bg-success" id="gymLive">&nbsp;</span></div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="small text-muted" id="gymSummary">&nbsp;</div>
+        <button type="button" class="btn btn-success btn-sm" id="btnExportExcel" title="Download sesuai filter yang sedang aktif">
+            <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+            📥 Download Excel
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body pb-0">
+        <form id="gymFilter" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fFrom">Dari</label>
+                <input type="date" id="fFrom" name="from" class="form-control form-control-sm" value="@ViewBag.DefaultFrom" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fTo">Sampai</label>
+                <input type="date" id="fTo" name="to" class="form-control form-control-sm" value="@ViewBag.DefaultTo" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fType">Aktivitas</label>
+                <select id="fType" name="type" class="form-select form-select-sm">
+                    <option value="">Semua Aktivitas</option>
+                    @foreach (var t in types)
+                    {
+                        <option value="@t.Id">@t.Ikon @t.Nama@(t.IsActive ? "" : " (nonaktif)")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fStatus">Status</label>
+                <select id="fStatus" name="status" class="form-select form-select-sm">
+                    <option value="">Semua Status</option>
+                    <option value="ingym">Berlangsung</option>
+                    <option value="selesai">Selesai</option>
+                    <option value="tidak">Tidak diselesaikan</option>
+                    <option value="lama">Data lama</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fDepartment">Department</label>
+                <select id="fDepartment" name="department" class="form-select form-select-sm">
+                    <option value="">Semua Department</option>
+                    @foreach (var d in departments)
+                    {
+                        <option value="@d">@d</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label small mb-1" for="fPosition">Jabatan</label>
+                <select id="fPosition" name="position" class="form-select form-select-sm">
+                    <option value="">Semua Jabatan</option>
+                    @foreach (var p in positions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-1 d-grid">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetFilter">Reset</button>
+            </div>
+            <div class="col-12">
+                <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Rentang cepat">
+                    <button type="button" class="btn btn-outline-primary" data-range="0">Hari ini</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="6">7 hari</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="29">30 hari</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="all">Semua</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            @* Tidak pakai class "datatable" supaya tidak di-init otomatis (client-side) oleh _AdminLayout *@
+            <table class="table mb-0 align-middle w-100" id="gymTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mulai</th>
+                        <th>NIK</th>
+                        <th>Nama</th>
+                        <th>Department</th>
+                        <th>Aktivitas</th>
+                        <th>Selesai</th>
+                        <th>Durasi</th>
+                        <th>Jarak</th>
+                        <th>Status</th>
+                        <th class="text-end">Berat (kg)</th>
+                        <th>Lokasi Mulai</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+<partial name="_RouteModal" />
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="~/js/fitness-track.js" asp-append-version="true"></script>
+    <script src="~/js/route-map.js" asp-append-version="true"></script>
+    <script>
+        window.FTW_GYM = {
+            routeUrl: '@Url.Action("Route", "GymHistory", new { id = 0 })'.replace(/0$/, '__ID__'),
+            dataUrl: '@Url.Action("Data", "GymHistory")',
+            exportUrl: '@Url.Action("Export", "GymHistory")',
+            maxExportRows: @FitToWorkApp.Controllers.Admin.GymHistoryController.MaxExportRows,
+            defaultFrom: '@ViewBag.DefaultFrom',
+            defaultTo: '@ViewBag.DefaultTo'
+        };
+    </script>
+    <script src="~/js/gym-history.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,26 @@
+@{
+    ViewData["Title"] = "Rekam Medis Karyawan";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-4">
+    <h4 class="mb-0">Rekam Medis Karyawan</h4>
+    <div class="text-muted small">Cari karyawan AKP atau karyawan mitra untuk melihat seluruh riwayat pemeriksaan kesehatan dan kunjungan klinik.</div>
+</div>
+
+<div class="card shadow-sm" style="max-width:640px">
+    <div class="card-body">
+        @{ ViewData["PickerIncludeMitra"] = true; }
+        <partial name="_EmployeePicker" model="((int?)null, (string?)null)" />
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    <script>
+        const base = '@Url.Action("Employee", "MedicalRecord", new { id = 0 })'.replace(/\/0$/, '/');
+        document.querySelector('.employee-picker').addEventListener('employee:selected', (e) => {
+            if (e.detail) window.location.href = base + e.detail.id;
+        });
+    </script>
+}

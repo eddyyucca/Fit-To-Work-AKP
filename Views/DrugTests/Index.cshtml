@@ -1,0 +1,174 @@
+@model List<DrugAlcoholTest>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Tes Urin & Alkohol";
+    Layout = "_AdminLayout";
+    var departments = (List<string>)ViewBag.Departments;
+    string? dept = ViewBag.Department;
+    string? hasil = ViewBag.Hasil;
+    string? jenis = ViewBag.Jenis;
+    string? kelompok = ViewBag.Kelompok;
+    var mitras = (List<string>)ViewBag.Mitras;
+    int maxRows = ViewBag.MaxRows;
+    var positif = Model.Count(t => t.IsPositive);
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Tes Urin &amp; Alkohol</h4>
+        <div class="text-muted small">Tes urin (narkoba) &amp; tes alkohol karyawan AKP &amp; karyawan mitra beserta lampiran hasilnya.</div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="small text-muted me-2">
+            @Model.Count tes
+            @if (positif > 0)
+            {
+                <span class="badge bg-danger ms-1">@positif positif</span>
+            }
+        </div>
+        <a class="btn btn-success btn-sm" id="btnExport"
+           asp-controller="DrugTests" asp-action="Export" asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To"
+           asp-route-department="@dept" asp-route-hasil="@hasil" asp-route-jenis="@jenis" asp-route-kelompok="@kelompok">📥 Download Excel</a>
+        <a class="btn btn-primary btn-sm" asp-controller="DrugTests" asp-action="Create">+ Input Tes</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body pb-0">
+        <form method="get" id="filter" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fFrom">Dari Tanggal</label>
+                <input type="date" id="fFrom" name="from" class="form-control form-control-sm" value="@ViewBag.From" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fTo">Sampai Tanggal</label>
+                <input type="date" id="fTo" name="to" class="form-control form-control-sm" value="@ViewBag.To" />
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label small mb-1" for="fKelompok">Karyawan</label>
+                <select id="fKelompok" name="kelompok" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    <option value="akp" selected="@(kelompok == "akp")">AKP</option>
+                    <option value="mitra" selected="@(kelompok == "mitra")">Mitra</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fDept">Department / Mitra</label>
+                <select id="fDept" name="department" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    <optgroup label="Department">
+                        @foreach (var d in departments)
+                        {
+                            <option value="@d" selected="@(d == dept)">@d</option>
+                        }
+                    </optgroup>
+                    @if (mitras.Count > 0)
+                    {
+                        <optgroup label="Mitra">
+                            @foreach (var m in mitras)
+                            {
+                                <option value="@m" selected="@(m == dept)">@m</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fJenis">Jenis tes</label>
+                <select id="fJenis" name="jenis" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    <option value="urin" selected="@(jenis == "urin")">Tes urin</option>
+                    <option value="alkohol" selected="@(jenis == "alkohol")">Tes alkohol</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fHasil">Hasil</label>
+                <select id="fHasil" name="hasil" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    <option value="Positif" selected="@(hasil == "Positif")">Positif</option>
+                    <option value="Negatif" selected="@(hasil == "Negatif")">Negatif</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="card-body">
+        @if (Model.Count >= maxRows)
+        {
+            <div class="alert alert-warning py-2 small">Menampilkan @maxRows tes terbaru. Persempit rentang tanggal atau download Excel untuk data lengkap.</div>
+        }
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle datatable" data-order='[]'>
+                <thead class="table-light">
+                    <tr>
+                        <th>Waktu</th>
+                        <th>NIP</th>
+                        <th>Nama</th>
+                        <th>Department / Mitra</th>
+                        <th>Alasan</th>
+                        <th>Urin</th>
+                        <th>Alkohol</th>
+                        <th>Hasil</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Model)
+                    {
+                        <tr>
+                            <td class="text-nowrap" data-order="@t.TestedAt.ToString("yyyyMMddHHmm")">@Clock.ToLocal(t.TestedAt).ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@t.NIP</td>
+                            <td>
+                                <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@t.EmployeeId" class="fw-semibold text-decoration-none">@t.NamaSnapshot</a>
+                                @if (t.AttachmentCount > 0)
+                                {
+                                    <span title="@t.AttachmentCount lampiran">📎</span>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (t.IsMitra)
+                                {
+                                    <span class="badge bg-info text-dark me-1">Mitra</span>
+                                }
+                                @t.DepartmentSnapshot
+                            </td>
+                            <td class="small">@DrugTestReasons.Label(t.Alasan)</td>
+                            <td>
+                                @if (t.TesUrin)
+                                {
+                                    <span class="badge @TestResults.BadgeClass(t.UrinHasil)">@t.UrinHasil</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                @if (t.TesAlkohol)
+                                {
+                                    <span class="badge @TestResults.BadgeClass(t.AlkoholHasil)">@t.AlkoholHasil</span>
+                                    @if (t.AlkoholKadar.HasValue)
+                                    {
+                                        <span class="small text-muted">@FitToWorkApp.Services.HealthRanges.Fmt(t.AlkoholKadar.Value)</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td><span class="badge @TestResults.BadgeClass(t.HasilAkhir)">@t.HasilAkhir.ToUpperInvariant()</span></td>
+                            <td class="text-end"><a class="btn btn-sm btn-outline-secondary" asp-controller="DrugTests" asp-action="Detail" asp-route-id="@t.Id">Detail</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Filter langsung diterapkan saat diubah
+        document.getElementById('filter').addEventListener('change', (e) => e.currentTarget.submit());
+    </script>
+}

@@ -1,0 +1,37 @@
+@model ClinicVisit
+@{
+    ViewData["Title"] = "Detail Kunjungan Klinik";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-4">
+    <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId" class="small text-decoration-none">‹ Rekam medis @Model.NamaSnapshot</a>
+    <h4 class="mb-0 mt-1">Kunjungan Klinik #@Model.Id</h4>
+    <div class="text-muted">@Model.NamaSnapshot · @Model.NIP · @Model.DepartmentSnapshot · @Model.SectionSnapshot</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <partial name="_VisitCard" model="Model" />
+    </div>
+    <div class="col-lg-5">
+        <div class="d-grid gap-2 mb-3">
+            <a class="btn btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-employeeId="@Model.EmployeeId">+ Kunjungan baru untuk karyawan ini</a>
+            <a class="btn btn-outline-secondary" asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId">Lihat rekam medis lengkap</a>
+        </div>
+        @if (!Model.IsCancelled)
+        {
+            <div class="card border-danger-subtle">
+                <div class="card-body">
+                    <h6 class="text-danger">Batalkan kunjungan</h6>
+                    <p class="small text-muted">Untuk koreksi salah input. Data tetap tersimpan sebagai jejak dan stok obat dikembalikan.</p>
+                    <form asp-controller="ClinicVisits" asp-action="Cancel" asp-route-id="@Model.Id" method="post"
+                          data-confirm="Batalkan kunjungan ini dan kembalikan stok obatnya?" data-confirm-ok="Ya, Batalkan">
+                        <input name="reason" class="form-control form-control-sm mb-2" maxlength="250" required placeholder="Alasan pembatalan" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Batalkan Kunjungan</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,488 @@
+@using System.Security.Claims
+@using FitToWorkApp.Security
+@inject IPermissionService PermissionService
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+    // Menu hanya tampil kalau role user punya hak aksesnya (dicek juga di controller)
+    var access = await PermissionService.GetAsync(User);
+    var canDashboard = access.Has(Permissions.FtwDashboard) || access.Has(Permissions.GymHistory) || access.Has(Permissions.MedicalVisit);
+    var anyMedical = access.Has(Permissions.MedicalCheckup) || access.Has(Permissions.MedicalVisit) || access.Has(Permissions.MedicalDrugTest);
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+
+    string Active(params string[] controllers) => controllers.Contains(currentController) ? "active" : "";
+    // Untuk 2 menu di controller yang sama (Pemeriksaan Kesehatan vs Follow Up Pemkes)
+    string ActiveAction(string controller, params string[] actions) =>
+        currentController == controller && actions.Contains(currentAction) ? "active" : "";
+    // Grup menu (tree) terbuka otomatis kalau salah satu halamannya sedang dibuka
+    string Open(params string[] controllers) => controllers.Contains(currentController) ? "menu-open" : "";
+}
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="light" data-lte-color-mode="off">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - AKP Sehat</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link rel="apple-touch-icon" href="~/images/apple-touch-icon.png" />
+    <meta name="theme-color" content="#1a8fd8" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@fontsource/source-sans-3@5.0.12/index.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/styles/overlayscrollbars.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" />
+    @* AdminLTE 4 (sudah termasuk Bootstrap 5.3) - file lokal di wwwroot/lib/adminlte *@
+    <link rel="stylesheet" href="~/lib/adminlte/css/adminlte.min.css" asp-append-version="true" />
+    <link href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/toastr@2.1.4/build/toastr.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/akp-theme.css" asp-append-version="true" />
+</head>
+
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        <!-- ================= Header ================= -->
+        <nav class="app-header navbar navbar-expand bg-body">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button" aria-label="Buka/tutup menu">
+                            <i class="bi bi-list"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link fw-semibold text-body">@ViewData["Title"]</span>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown user-menu">
+                        <a href="#" class="nav-link dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown">
+                            <span class="rounded-circle text-bg-akp-blue d-inline-flex align-items-center justify-content-center fw-semibold"
+                                  style="width:30px;height:30px;font-size:.85rem">@(string.IsNullOrEmpty(User.Identity?.Name) ? "?" : User.Identity!.Name![0].ToString().ToUpperInvariant())</span>
+                            <span class="d-none d-md-inline">@User.Identity!.Name</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li class="px-3 py-2">
+                                <div class="fw-semibold">@User.Identity!.Name</div>
+                                <span class="badge text-bg-secondary user-role">@(access.RoleName ?? "Tanpa role")</span>
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li>
+                                <a class="dropdown-item" asp-controller="Users" asp-action="ChangePassword"
+                                   asp-route-id="@User.FindFirstValue(ClaimTypes.NameIdentifier)"><i class="bi bi-key me-2"></i>Ganti Password Saya</a>
+                            </li>
+                            <li>
+                                <form asp-controller="Account" asp-action="Logout" method="post">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Keluar</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- ================= Sidebar (default AdminLTE: gelap + menu tree) ================= -->
+        <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+            <div class="sidebar-brand">
+                <a asp-controller="Admin" asp-action="Home" class="brand-link">
+                    <img src="~/images/akp-sehat-icon.png" alt="Logo AKP Sehat" class="brand-image" />
+                    <span class="brand-text">AKP <span>Sehat</span></span>
+                </a>
+            </div>
+            <div class="sidebar-wrapper">
+                <nav class="mt-2" aria-label="Menu utama">
+                    <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" data-accordion="false" id="navigation">
+                        @if (canDashboard)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link @Active("Admin")" asp-controller="Admin" asp-action="Dashboard">
+                                    <i class="nav-icon bi bi-speedometer2"></i><p>Dashboard</p>
+                                </a>
+                            </li>
+                        }
+                        @if (access.Has(Permissions.FtwHistory) || access.Has(Permissions.FtwSettings))
+                        {
+                            <li class="nav-item @Open("History", "FtwSettings")">
+                                <a href="#" class="nav-link @Active("History", "FtwSettings")">
+                                    <i class="nav-icon bi bi-clipboard2-check"></i>
+                                    <p>Fit To Work<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                </a>
+                                <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.FtwHistory))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("History")" asp-area="" asp-controller="History" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Riwayat Pengisian</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.FtwSettings))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("FtwSettings")" asp-area="" asp-controller="FtwSettings" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Pengaturan Pengisian</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                        @if (access.Has(Permissions.GymHistory) || access.Has(Permissions.FitnessTypes))
+                        {
+                            <li class="nav-item @Open("GymHistory", "ActivityTypes")">
+                                <a href="#" class="nav-link @Active("GymHistory", "ActivityTypes")">
+                                    <i class="nav-icon bi bi-activity"></i>
+                                    <p>Aktivitas Kebugaran<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                </a>
+                                <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.GymHistory))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("GymHistory")" asp-area="" asp-controller="GymHistory" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Riwayat Aktivitas</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.FitnessTypes))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("ActivityTypes")" asp-area="" asp-controller="ActivityTypes" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Jenis Aktivitas</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                        @if (anyMedical || access.Has(Permissions.MedicalMaster))
+                        {
+                            <li class="nav-item @Open("ClinicVisits", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                                <a href="#" class="nav-link @Active("ClinicVisits", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                                    <i class="nav-icon bi bi-hospital"></i>
+                                    <p>Klinik &amp; Kesehatan<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                </a>
+                                <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.MedicalVisit))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("ClinicVisits")" asp-area="" asp-controller="ClinicVisits" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Kunjungan Klinik</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalCheckup))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @(currentController == "Checkups" && currentAction != "FollowUps" ? "active" : "")" asp-area="" asp-controller="Checkups" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Pemeriksaan Kesehatan</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @ActiveAction("Checkups", "FollowUps")" asp-area="" asp-controller="Checkups" asp-action="FollowUps">
+                                                <i class="nav-icon bi bi-circle"></i><p>Follow Up Pemkes</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalDrugTest))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("DrugTests")" asp-area="" asp-controller="DrugTests" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Tes Urin &amp; Alkohol</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (anyMedical)
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("MedicalRecord")" asp-area="" asp-controller="MedicalRecord" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Rekam Medis Karyawan</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalMaster))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Medicines")" asp-area="" asp-controller="Medicines" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Obat &amp; Stok</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalMaster))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Diseases")" asp-area="" asp-controller="Diseases" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Jenis Penyakit</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("CheckupParameters")" asp-area="" asp-controller="CheckupParameters" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Parameter &amp; Skor Pemkes</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("HealthReferences")" asp-area="" asp-controller="HealthReferences" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Batas Alkohol &amp; Follow Up</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                        @if (access.Has(Permissions.MasterEmployees) || access.Has(Permissions.MasterOrganization) || access.Has(Permissions.MasterFormOptions) || access.Has(Permissions.MasterLocations) || access.Has(Permissions.MedicalMaster) || access.Has(Permissions.MedicalVisit))
+                        {
+                            <li class="nav-item @Open("Employees", "Organization", "FormOptions", "SiteLocations", "Mitras", "MitraEmployees", "DiseaseCategories", "MedicineUnits", "UrineParameters")">
+                                <a href="#" class="nav-link @Active("Employees", "Organization", "FormOptions", "SiteLocations", "Mitras", "MitraEmployees", "DiseaseCategories", "MedicineUnits", "UrineParameters")">
+                                    <i class="nav-icon bi bi-database"></i>
+                                    <p>Master Data<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                </a>
+                                <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.MasterEmployees))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Employees")" asp-area="" asp-controller="Employees" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Data Karyawan</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MasterOrganization))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Organization")" asp-area="" asp-controller="Organization" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Data Organisasi</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MasterFormOptions))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("FormOptions")" asp-area="" asp-controller="FormOptions" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Master Data Form</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MasterLocations))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("SiteLocations")" asp-area="" asp-controller="SiteLocations" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Lokasi Site</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalMaster) || access.Has(Permissions.MedicalVisit))
+                                    {
+                                        @* Sub menu bertingkat: Mitra > Data Mitra / Karyawan Mitra *@
+                                        <li class="nav-item @Open("Mitras", "MitraEmployees")">
+                                            <a href="#" class="nav-link">
+                                                <i class="nav-icon bi bi-buildings"></i>
+                                                <p>Mitra<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                            </a>
+                                            <ul class="nav nav-treeview">
+                                                @if (access.Has(Permissions.MedicalMaster))
+                                                {
+                                                    <li class="nav-item">
+                                                        <a class="nav-link @Active("Mitras")" asp-area="" asp-controller="Mitras" asp-action="Index">
+                                                            <i class="nav-icon bi bi-dot"></i><p>Data Mitra</p>
+                                                        </a>
+                                                    </li>
+                                                }
+                                                @if (access.Has(Permissions.MedicalVisit))
+                                                {
+                                                    <li class="nav-item">
+                                                        <a class="nav-link @Active("MitraEmployees")" asp-area="" asp-controller="MitraEmployees" asp-action="Index">
+                                                            <i class="nav-icon bi bi-dot"></i><p>Karyawan Mitra</p>
+                                                        </a>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.MedicalMaster))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("DiseaseCategories")" asp-area="" asp-controller="DiseaseCategories" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Kategori Penyakit</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("MedicineUnits")" asp-area="" asp-controller="MedicineUnits" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Satuan Obat</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("UrineParameters")" asp-area="" asp-controller="UrineParameters" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Parameter Tes Urin</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                        @if (access.Has(Permissions.AdminUsers) || access.Has(Permissions.AdminAccessLog) || access.IsSuperAdmin)
+                        {
+                            <li class="nav-item @Open("Users", "Roles", "AccessLogs", "DataReset")">
+                                <a href="#" class="nav-link @Active("Users", "Roles", "AccessLogs", "DataReset")">
+                                    <i class="nav-icon bi bi-gear"></i>
+                                    <p>Pengaturan<i class="nav-arrow bi bi-chevron-right"></i></p>
+                                </a>
+                                <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.AdminUsers))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Users")" asp-area="" asp-controller="Users" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>User Admin</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.AdminUsers))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("Roles")" asp-area="" asp-controller="Roles" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Role &amp; Hak Akses</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.Has(Permissions.AdminAccessLog))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("AccessLogs")" asp-area="" asp-controller="AccessLogs" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Log Akses</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (access.IsSuperAdmin)
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("DataReset")" asp-area="" asp-controller="DataReset" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Reset Data</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- ================= Konten ================= -->
+        <main class="app-main">
+            <div class="app-content">
+                <div class="container-fluid">
+                    @* Pesan sukses/gagal dari TempData tampil sebagai toastr (lihat script di bawah) *@
+                    @RenderBody()
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer small">
+            <div class="float-end d-none d-sm-inline text-muted">PT. Adhi Kartiko Pratama, Tbk</div>
+            <strong>&copy; @DateTime.UtcNow.Year AKP Sehat</strong>
+        </footer>
+    </div>
+
+    <!-- Modal konfirmasi global: pengganti confirm() bawaan browser.
+         Cara pakai di view mana pun: <form ... data-confirm="Hapus data ini?" data-confirm-ok="Ya, Hapus"> -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalTitle">Konfirmasi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body" id="confirmModalMessage"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-danger" id="confirmModalOk">Ya, Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/browser/overlayscrollbars.browser.es6.min.js"></script>
+    <script src="~/lib/adminlte/js/adminlte.min.js" asp-append-version="true"></script>
+    <!-- DataTables: tabel dengan class="datatable" otomatis dapat cari/sortir/pagination.
+         Kolom terakhir (biasanya "Aksi") tidak bisa disortir. -->
+    <script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastr@2.1.4/build/toastr.min.js"></script>
+    <!-- Flatpickr: kalender tanggal (tampil dd/mm/yyyy), dipasang otomatis oleh js/datepicker.js -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/id.js"></script>
+    <script src="~/js/datepicker.js" asp-append-version="true"></script>
+
+    <script>
+        // ---- Scrollbar halus di sidebar (desktop) ----
+        document.addEventListener('DOMContentLoaded', function () {
+            var wrapper = document.querySelector('.sidebar-wrapper');
+            if (wrapper && window.innerWidth > 992 && window.OverlayScrollbarsGlobal && OverlayScrollbarsGlobal.OverlayScrollbars) {
+                OverlayScrollbarsGlobal.OverlayScrollbars(wrapper, { scrollbars: { theme: 'os-theme-light', autoHide: 'leave', clickScroll: true } });
+            }
+        });
+
+        // ---- Toastr: gaya notifikasi seragam di semua halaman admin ----
+        toastr.options = { closeButton: true, progressBar: true, newestOnTop: true, positionClass: 'toast-top-right', timeOut: 5000 };
+        document.addEventListener('DOMContentLoaded', function () {
+            var success = @Json.Serialize(TempData["Success"] as string);
+            var error = @Json.Serialize(TempData["Error"] as string);
+            if (success) toastr.success(success);
+            if (error) toastr.error(error, null, { timeOut: 10000 });
+        });
+
+        // ---- Konfirmasi sebelum submit form yang punya atribut data-confirm ----
+        (function () {
+            var pendingForm = null;
+            var modalEl = document.getElementById('confirmModal');
+            var modal = null;
+
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!form.matches || !form.matches('form[data-confirm]')) return;
+                if (form.dataset.confirmed === 'true') return;   // sudah dikonfirmasi -> biarkan submit
+
+                e.preventDefault();
+                pendingForm = form;
+                document.getElementById('confirmModalMessage').textContent = form.dataset.confirm;
+                document.getElementById('confirmModalOk').textContent = form.dataset.confirmOk || 'Ya, Lanjutkan';
+                modal = modal || new bootstrap.Modal(modalEl);
+                modal.show();
+            }, true);
+
+            document.getElementById('confirmModalOk').addEventListener('click', function () {
+                if (!pendingForm) return;
+                pendingForm.dataset.confirmed = 'true';
+                modal.hide();
+                // requestSubmit() menjalankan validasi HTML5 & ikut mengirim token anti-forgery form
+                if (pendingForm.requestSubmit) pendingForm.requestSubmit(); else pendingForm.submit();
+            });
+
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                if (pendingForm && pendingForm.dataset.confirmed !== 'true') pendingForm = null;
+            });
+        })();
+
+        // ---- DataTables client-side untuk tabel kecil (class="datatable") ----
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.jQuery && jQuery.fn.DataTable) {
+                jQuery('.datatable').DataTable({
+                    columnDefs: [{ orderable: false, targets: -1 }],
+                    language: {
+                        search: "Cari:",
+                        lengthMenu: "Tampilkan _MENU_ data",
+                        info: "Menampilkan _START_ - _END_ dari _TOTAL_ data",
+                        infoEmpty: "Tidak ada data",
+                        infoFiltered: "(disaring dari _MAX_ total data)",
+                        zeroRecords: "Data tidak ditemukan",
+                        paginate: { previous: "‹", next: "›" }
+                    }
+                });
+            }
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+
+</html>

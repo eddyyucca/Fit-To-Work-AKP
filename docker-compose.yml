@@ -1,0 +1,65 @@
+services:
+  # --------------------------------------------------------
+  # SQL Server
+  # --------------------------------------------------------
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fittowork-db
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"   # ganti dengan password kuat sebelum production
+    ports:
+      - "1433:1433"   # opsional, buka kalau mau konek dari SSMS/Azure Data Studio di host
+    volumes:
+      - fittowork-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # --------------------------------------------------------
+  # Migrasi schema (jalan sekali tiap kali "docker compose up",
+  # tapi schema.sql sudah pakai IF NOT EXISTS jadi aman diulang)
+  # --------------------------------------------------------
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fittowork-db-init
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./Database:/scripts:ro
+    entrypoint: >
+      /opt/mssql-tools18/bin/sqlcmd -S db -U sa -P "YourStrong!Passw0rd" -C
+      -d master -i /scripts/schema.sql
+    restart: "no"
+
+  # --------------------------------------------------------
+  # Aplikasi ASP.NET Core
+  # --------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fittowork-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      # Override connection string dari appsettings.json - format "__" untuk nested config.
+      ConnectionStrings__DefaultConnection: "Server=db;Database=FitToWorkDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;"
+      # Sinkron karyawan dari HRIS (REST API).
+      HRIS_API_URL: "${HRIS_API_URL:-http://host.docker.internal:8001}"
+      HRIS_API_TOKEN: "${HRIS_API_TOKEN:-}"
+    ports:
+      - "${APP_PORT:-8081}:8080"
+
+volumes:
+  fittowork-db-data:

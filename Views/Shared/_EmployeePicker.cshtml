@@ -1,0 +1,23 @@
+@* Pemilih karyawan untuk form medis. Model: (int? EmployeeId, string? Label). Butuh wwwroot/js/employee-picker.js
+   Set ViewData["PickerIncludeMitra"] = true sebelum memanggil partial ini supaya karyawan mitra ikut dicari. *@
+@model (int? EmployeeId, string? Label)
+@{
+    var includeMitra = ViewData["PickerIncludeMitra"] is true;
+    var searchUrl = includeMitra
+        ? Url.Action("SearchEmployee", "MedicalRecord", new { includeMitra = true })
+        : Url.Action("SearchEmployee", "MedicalRecord");
+    var placeholder = includeMitra
+        ? "Ketik NIP / ID mitra (mis. GPE-3450) atau nama (min. 2 huruf)…"
+        : "Ketik NIP atau nama karyawan (min. 2 huruf)…";
+}
+<div class="employee-picker position-relative" data-search-url="@searchUrl">
+    <input type="hidden" name="EmployeeId" value="@Model.EmployeeId" class="ep-id" />
+    <div class="input-group">
+        <span class="input-group-text">🔍</span>
+        <input type="text" class="form-control ep-input" placeholder="@placeholder"
+               autocomplete="off" value="@Model.Label" @(Model.EmployeeId.HasValue ? "readonly" : "") />
+        <button type="button" class="btn btn-outline-secondary ep-clear @(Model.EmployeeId.HasValue ? "" : "d-none")">Ganti</button>
+    </div>
+    <div class="list-group position-absolute w-100 shadow ep-results" style="z-index:1050; max-height:320px; overflow:auto;"></div>
+    <div class="small text-muted mt-1 ep-info"></div>
+</div>

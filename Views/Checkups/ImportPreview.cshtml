@@ -1,0 +1,96 @@
+@model FitToWorkApp.Controllers.Admin.CheckupImportPreview
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Pratinjau Import Pemkes";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-3">
+    <a asp-controller="Checkups" asp-action="Import" class="small text-decoration-none">‹ Upload file lain</a>
+    <h4 class="mb-0 mt-1">Pratinjau Import Pemeriksaan Kesehatan</h4>
+    <div class="text-muted small">File: @Model.FileName · @Model.Rows.Count baris dibaca · belum ada yang tersimpan</div>
+</div>
+
+@foreach (var e in Model.FileErrors)
+{
+    <div class="alert alert-danger">@e</div>
+}
+@foreach (var w in Model.FileWarnings)
+{
+    <div class="alert alert-warning py-2 small">@w</div>
+}
+
+@if (Model.FileErrors.Count == 0)
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge bg-success fs-6 fw-normal">Siap disimpan: @Model.Siap</span>
+        <span class="badge bg-warning text-dark fs-6 fw-normal">Dilewati (sudah ada): @Model.Dilewati</span>
+        <span class="badge bg-danger fs-6 fw-normal">Gagal: @Model.Gagal</span>
+    </div>
+
+    @if (Model.Siap == 0)
+    {
+        <div class="alert alert-warning">Tidak ada baris yang bisa disimpan. Perbaiki file lalu upload ulang.</div>
+    }
+    else
+    {
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span>
+                <b>@Model.Siap pemeriksaan</b> akan disimpan.
+                @if (Model.Gagal > 0) { <text>@Model.Gagal baris gagal <b>tidak</b> ikut disimpan (lihat kolom Keterangan).</text> }
+            </span>
+            <form asp-controller="Checkups" asp-action="ImportConfirm" method="post"
+                  data-confirm="Simpan @Model.Siap hasil pemeriksaan kesehatan?" data-confirm-ok="Ya, Simpan">
+                <input type="hidden" name="token" value="@Model.Token" />
+                <button type="submit" class="btn btn-primary">💾 Simpan @Model.Siap Pemeriksaan</button>
+            </form>
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle datatable" data-order='[]'>
+                <thead class="table-light small">
+                    <tr>
+                        <th>Baris</th>
+                        <th>Status</th>
+                        <th>NIP</th>
+                        <th>Nama</th>
+                        <th>Department</th>
+                        <th>Tanggal</th>
+                        <th class="text-end">Skor</th>
+                        <th>Kategori</th>
+                        <th>Perlu perhatian</th>
+                        <th>Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td data-order="@r.RowNumber">@r.RowNumber</td>
+                            <td><span class="badge @CheckupImportStatus.BadgeClass(r.Status)">@r.Status</span></td>
+                            <td class="text-nowrap">@r.Nip</td>
+                            <td>@(r.Nama ?? r.NamaDiFile)</td>
+                            <td>@r.Department</td>
+                            <td class="text-nowrap" data-order="@(r.ExaminedAtLocal?.ToString("yyyyMMddHHmm"))">@(r.ExaminedAtLocal?.ToString("dd/MM/yyyy HH:mm"))</td>
+                            <td class="text-end fw-semibold">@r.TotalSkor</td>
+                            <td>
+                                @if (r.RisikoLabel is not null)
+                                {
+                                    <span class="badge @RiskColors.BadgeClass(r.RisikoColor)">@r.RisikoLabel</span>
+                                }
+                            </td>
+                            <td>@string.Join(", ", r.Abnormal)</td>
+                            <td>
+                                @foreach (var e in r.Errors) { <div class="text-danger">• @e</div> }
+                                @foreach (var w in r.Warnings) { <div class="text-warning-emphasis">• @w</div> }
+                                @if (r.AdaTemuan && r.Errors.Count == 0) { <div class="text-primary">• Follow up @r.FollowUpDate?.ToString("dd/MM/yyyy")</div> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

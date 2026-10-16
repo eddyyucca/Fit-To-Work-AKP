@@ -1,0 +1,122 @@
+@model AdminUserEditViewModel
+@{
+    ViewData["Title"] = "Edit User Admin";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-4">
+    <a asp-controller="Users" asp-action="Index" class="small text-decoration-none">‹ Kembali ke daftar user</a>
+    <h4 class="mb-0 mt-1">Edit User Admin</h4>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4" style="max-width:560px;">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <dl class="row small mb-3">
+            <dt class="col-4 text-muted fw-normal">Username</dt>
+            <dd class="col-8 fw-semibold">
+                @Model.Username
+                @if (Model.IsSelf) { <span class="badge bg-primary ms-1">Anda</span> }
+            </dd>
+            <dt class="col-4 text-muted fw-normal">Role</dt>
+            <dd class="col-8">@(Model.RoleName ?? "Belum ada role") <span class="text-muted">(diubah di tabel user)</span></dd>
+            <dt class="col-4 text-muted fw-normal">Status</dt>
+            <dd class="col-8">
+                @if (Model.IsActive) { <span class="badge bg-success">Aktif</span> }
+                else { <span class="badge bg-secondary">Nonaktif</span> }
+            </dd>
+        </dl>
+
+        <form asp-controller="Users" asp-action="Edit" asp-route-id="@Model.Id" method="post" autocomplete="off">
+            <div class="mb-3">
+                <label asp-for="FullName" class="form-label"></label>
+                <input asp-for="FullName" class="form-control" id="fullNameInput" maxlength="150" />
+                <div class="form-text">Tampil sebagai nama pemeriksa/petugas di data yang dibuat setelah ini. Data lama tidak berubah.</div>
+                <span asp-validation-for="FullName" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4 position-relative">
+                <label class="form-label" for="employeeSearch">Data karyawan terhubung <span class="text-muted small">(opsional)</span></label>
+                <input type="hidden" name="EmployeeId" id="employeeId" value="@Model.EmployeeId" />
+                <div class="input-group">
+                    <input type="text" id="employeeSearch" class="form-control" value="@Model.EmployeeLabel"
+                           placeholder="Ketik NIP atau nama karyawan AKP (min. 2 huruf)…" @(Model.EmployeeId.HasValue ? "readonly" : "") />
+                    <button type="button" class="btn btn-outline-secondary @(Model.EmployeeId.HasValue ? "" : "d-none")" id="employeeClear">Lepas</button>
+                </div>
+                <div id="employeeSuggestions" class="list-group position-absolute w-100 shadow" style="z-index:1050; max-height:300px; overflow:auto;"></div>
+                <div class="form-text">Satu karyawan hanya bisa terhubung ke satu akun admin. Karyawan mitra tidak bisa dipilih.</div>
+                <span asp-validation-for="EmployeeId" class="text-danger small"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Simpan</button>
+            <a asp-controller="Users" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const search = document.getElementById('employeeSearch');
+            const hidden = document.getElementById('employeeId');
+            const clearBtn = document.getElementById('employeeClear');
+            const box = document.getElementById('employeeSuggestions');
+            const fullName = document.getElementById('fullNameInput');
+            const url = '@Url.Action("SearchEmployee", "Users")';
+            let timer = null, seq = 0;
+
+            const close = () => { box.innerHTML = ''; };
+
+            const pick = (emp) => {
+                hidden.value = emp.id;
+                search.value = `${emp.nip} - ${emp.nama}`;
+                search.readOnly = true;
+                clearBtn.classList.remove('d-none');
+                if (!fullName.value.trim()) fullName.value = emp.nama;   // nama hanya diisi kalau masih kosong
+                close();
+            };
+
+            clearBtn.addEventListener('click', () => {
+                hidden.value = '';
+                search.value = '';
+                search.readOnly = false;
+                clearBtn.classList.add('d-none');
+                search.focus();
+            });
+
+            search.addEventListener('input', () => {
+                clearTimeout(timer);
+                const q = search.value.trim();
+                if (q.length < 2) { close(); return; }
+                timer = setTimeout(async () => {
+                    const my = ++seq;
+                    try {
+                        const res = await fetch(`${url}?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        if (!res.ok) throw new Error(res.status);
+                        const list = await res.json();
+                        if (my !== seq) return;
+                        box.innerHTML = list.length
+                            ? list.map((e, i) => `<button type="button" class="list-group-item list-group-item-action" data-i="${i}">
+                                    <div class="fw-semibold">${esc(e.nama)}</div>
+                                    <div class="small text-muted">${esc(e.nip)}${e.section ? ' · ' + esc(e.section) : ''}</div>
+                               </button>`).join('')
+                            : '<div class="list-group-item text-muted small">Karyawan tidak ditemukan</div>';
+                        box.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => pick(list[Number(b.dataset.i)])));
+                    } catch {
+                        box.innerHTML = '<div class="list-group-item text-danger small">Gagal mencari karyawan</div>';
+                    }
+                }, 250);
+            });
+
+            search.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') { ev.preventDefault(); box.querySelector('[data-i]')?.click(); }
+                if (ev.key === 'Escape') close();
+            });
+            document.addEventListener('click', (ev) => { if (!box.contains(ev.target) && ev.target !== search) close(); });
+        })();
+    </script>
+}

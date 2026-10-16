@@ -1,0 +1,87 @@
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Import Pemeriksaan Kesehatan";
+    Layout = "_AdminLayout";
+    var parameters = (List<CheckupParameter>)ViewBag.Parameters;
+    var columns = CheckupImport.BuildColumns(parameters);
+    var auto = parameters.Where(p => p.IsActive && p.InputType is CheckupInputTypes.Age or CheckupInputTypes.Sex).ToList();
+}
+
+<div class="mb-4">
+    <a asp-controller="Checkups" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Pemeriksaan Kesehatan</a>
+    <h4 class="mb-0 mt-1">Import Pemeriksaan Kesehatan dari Excel</h4>
+    <div class="text-muted small">Untuk memasukkan hasil pemkes banyak karyawan sekaligus (mis. MCU berkala).</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <ol class="small mb-4">
+                    <li class="mb-1">Unduh template. Kolomnya mengikuti menu <a asp-controller="CheckupParameters" asp-action="Index">Parameter &amp; Skor Pemkes</a> saat ini.</li>
+                    <li class="mb-1">Isi satu baris per karyawan: <b>NIP</b> dan <b>Tanggal Pemeriksaan</b> wajib, hasil yang tidak diperiksa boleh kosong.</li>
+                    <li class="mb-1">Upload file. Sistem menampilkan <b>pratinjau</b> lengkap dengan skor &amp; kategori risiko. Data baru tersimpan setelah Anda klik <b>Simpan</b>.</li>
+                </ol>
+
+                <a asp-controller="Checkups" asp-action="ImportTemplate" class="btn btn-outline-primary btn-sm mb-4">⬇️ Unduh Template</a>
+
+                <form asp-controller="Checkups" asp-action="Import" method="post" enctype="multipart/form-data" id="importForm">
+                    <label class="form-label" for="importFile">File Excel (.xlsx)</label>
+                    <input type="file" name="file" id="importFile" class="form-control mb-3" accept=".xlsx" required />
+                    <button type="submit" class="btn btn-primary" id="importBtn">
+                        <span class="spinner-border spinner-border-sm me-1 d-none" id="importSpinner"></span>Cek File
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header bg-white fw-semibold">Kolom di template</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 small align-middle">
+                    <thead class="table-light"><tr><th>Kolom</th><th>Isian</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in columns)
+                        {
+                            <tr>
+                                <td class="fw-semibold text-nowrap">
+                                    @c.Header
+                                    @if (c.Kind is CheckupImport.KNip or CheckupImport.KTanggal) { <span class="badge bg-danger ms-1">wajib</span> }
+                                </td>
+                                <td class="text-muted">@c.Note</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Perlu diperhatikan</div>
+            <div class="card-body small text-muted">
+                <ul class="ps-3 mb-0">
+                    <li>Karyawan dicocokkan berdasarkan <b>NIP</b>. Nama di file hanya untuk dicek.</li>
+                    @if (auto.Count > 0)
+                    {
+                        <li>@string.Join(" & ", auto.Select(p => p.Name)) diambil otomatis dari <b>Data Karyawan</b> (tanggal lahir &amp; jenis kelamin). Kalau masih kosong di sana, poinnya tidak dihitung.</li>
+                    }
+                    <li><b>Skor &amp; kategori risiko dihitung sistem</b>, tidak perlu diisi.</li>
+                    <li>IMT dihitung dari <b>berat &amp; tinggi badan</b> (keduanya wajib diisi kalau ingin IMT dinilai).</li>
+                    <li>Karyawan yang sudah punya pemkes di <b>tanggal yang sama</b> akan dilewati, jadi aman kalau file ter-upload 2 kali.</li>
+                    <li>Baris yang gagal dilewati; baris lain tetap disimpan. Karyawan mitra tidak bisa di-import.</li>
+                    <li>Pemeriksa tercatat atas nama Anda. Lampiran hasil bisa ditambahkan per pemeriksaan setelah import.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('importForm').addEventListener('submit', () => {
+            document.getElementById('importBtn').disabled = true;
+            document.getElementById('importSpinner').classList.remove('d-none');
+        });
+    </script>
+}

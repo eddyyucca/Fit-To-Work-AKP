@@ -1,0 +1,125 @@
+@model FitToWorkApp.Controllers.Admin.SiteLocationFormViewModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Tambah Lokasi Site" : "Ubah Lokasi Site";
+    Layout = "_AdminLayout";
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #siteMap { height: 480px; border-radius: .5rem; cursor: crosshair; }
+    @@media (max-width: 991.98px) { #siteMap { height: 360px; } }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">@ViewData["Title"]</h4>
+        <div class="text-muted small">Klik peta (atau geser penanda) untuk menentukan titik site, lalu atur radius area yang diizinkan.</div>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary">‹ Kembali</a>
+</div>
+
+<form asp-action="Save" method="post" autocomplete="off" id="siteForm">
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <div class="input-group input-group-sm flex-grow-1" style="max-width:420px">
+                            <span class="input-group-text"><i class="bi bi-clipboard"></i></span>
+                            <input type="text" class="form-control" id="pasteCoord" placeholder="Tempel koordinat Google Maps, mis. -0.502106, 117.153709" />
+                            <button type="button" class="btn btn-outline-primary" id="btnPaste">Pakai</button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnMyLocation">
+                            <i class="bi bi-crosshair me-1"></i>Lokasi saya
+                        </button>
+                    </div>
+                    <div id="siteMap" aria-label="Peta untuk memilih titik lokasi site"></div>
+                    <div class="small text-muted mt-2">
+                        Tips: di Google Maps, klik kanan titik site &rsaquo; klik angka koordinat untuk menyalin, lalu tempel di kotak di atas.
+                        Lingkaran abu-abu = lokasi lain yang sudah terdaftar.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="Nama" class="form-label"></label>
+                        <input asp-for="Nama" class="form-control" placeholder="Mis. Site Tanjung / Kantor Balikpapan" maxlength="100" />
+                        <span asp-validation-for="Nama" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row g-2 mb-1">
+                        <div class="col-6">
+                            <label asp-for="Latitude" class="form-label small mb-1">Latitude</label>
+                            <input asp-for="Latitude" type="number" step="0.000001" min="-90" max="90" class="form-control form-control-sm"
+                                   value="@Model.Latitude?.ToString("0.000000", inv)" />
+                        </div>
+                        <div class="col-6">
+                            <label asp-for="Longitude" class="form-label small mb-1">Longitude</label>
+                            <input asp-for="Longitude" type="number" step="0.000001" min="-180" max="180" class="form-control form-control-sm"
+                                   value="@Model.Longitude?.ToString("0.000000", inv)" />
+                        </div>
+                    </div>
+                    <span asp-validation-for="Latitude" class="text-danger small d-block"></span>
+                    <span asp-validation-for="Longitude" class="text-danger small d-block mb-2"></span>
+
+                    <div class="mb-3">
+                        <label asp-for="RadiusMeter" class="form-label"></label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="range" class="form-range flex-grow-1" id="radiusRange" min="50" max="5000" step="50" value="@(Math.Min(Model.RadiusMeter ?? 500, 5000))" />
+                            <input asp-for="RadiusMeter" type="number" min="50" max="20000" step="10" class="form-control form-control-sm" style="width:100px" />
+                        </div>
+                        <div class="small text-muted">
+                            Area yang diizinkan dari titik site. Sarankan minimal 200 m karena GPS HP bisa meleset ±20–100 m.
+                        </div>
+                        <span asp-validation-for="RadiusMeter" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="IpPublik" class="form-label"></label>
+                        <div class="input-group input-group-sm">
+                            <input asp-for="IpPublik" class="form-control" placeholder="Mis. 103.10.20.30" />
+                            @if (ViewBag.MyIp is string myIp)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" id="btnMyIp" data-ip="@myIp" title="Isi dengan IP publik komputer ini">IP saya</button>
+                            }
+                        </div>
+                        <div class="small text-muted">
+                            HP yang tersambung ke Wi-Fi dengan IP publik ini dianggap berada di site, walau GPS lemah. Pisahkan dengan koma kalau lebih dari satu.
+                            Klik <em>IP saya</em> hanya kalau komputer ini sedang tersambung ke Wi-Fi site.
+                        </div>
+                        <span asp-validation-for="IpPublik" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Keterangan" class="form-label"></label>
+                        <input asp-for="Keterangan" class="form-control" maxlength="250" placeholder="Opsional" />
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input asp-for="IsActive" class="form-check-input" role="switch" />
+                        <label asp-for="IsActive" class="form-check-label">Aktif (dipakai untuk kunci lokasi)</label>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Simpan Lokasi</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>window.AKP_SITES = { mode: 'edit', sites: @Json.Serialize(ViewBag.OtherSites) };</script>
+    <script src="~/js/site-locations.js" asp-append-version="true"></script>
+}

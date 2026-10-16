@@ -1,0 +1,147 @@
+@model List<FitToWorkApp.Models.Mitra>
+@{
+    ViewData["Title"] = "Data Mitra";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Data Mitra Kerja</h4>
+        <div class="text-muted small">
+            Perusahaan mitra / kontraktor. Kode 3 huruf menjadi awalan ID karyawan mitra, mis. <strong>GPE-3450</strong>.
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#mitraModal" data-mode="create">+ Tambah Mitra</button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" data-order='[[0,"asc"]]'>
+            <thead class="table-light">
+                <tr>
+                    <th style="width:90px">Kode</th>
+                    <th>Nama Mitra</th>
+                    <th>Keterangan</th>
+                    <th class="text-end">Karyawan</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Model)
+                {
+                    <tr class="@(m.IsActive ? "" : "text-muted")">
+                        <td><span class="badge bg-dark fs-6">@m.Kode</span></td>
+                        <td class="fw-semibold">@m.Nama</td>
+                        <td class="small">@m.Keterangan</td>
+                        <td class="text-end" data-order="@m.JumlahKaryawan">
+                            @if (m.JumlahKaryawan > 0)
+                            {
+                                <a asp-controller="MitraEmployees" asp-action="Index" asp-route-mitraId="@m.Id">@m.JumlahKaryawan orang</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>@(m.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#mitraModal"
+                                    data-mode="edit" data-id="@m.Id" data-kode="@m.Kode" data-nama="@m.Nama" data-ket="@m.Keterangan"
+                                    data-count="@m.JumlahKaryawan" data-active="@(m.IsActive ? "true" : "false")">Ubah</button>
+                            <form asp-controller="Mitras" asp-action="ToggleActive" asp-route-id="@m.Id" method="post" class="d-inline">
+                                <input type="hidden" name="activate" value="@(m.IsActive ? "false" : "true")" />
+                                <button type="submit" class="btn btn-sm @(m.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(m.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                            @if (m.JumlahKaryawan == 0)
+                            {
+                                <form asp-controller="Mitras" asp-action="Delete" asp-route-id="@m.Id" method="post" class="d-inline"
+                                      data-confirm="Hapus mitra @m.Kode - @m.Nama?">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        Mitra <strong>nonaktif</strong> tidak muncul lagi di pilihan saat tambah karyawan mitra, tapi data lama tetap aman.
+        Mitra yang masih punya karyawan tidak bisa dihapus.
+    </div>
+</div>
+
+<div class="modal fade" id="mitraModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" asp-controller="Mitras" asp-action="Save" method="post" autocomplete="off">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mitraModalTitle">Tambah Mitra</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Id" id="mId" value="0" />
+                <div class="row">
+                    <div class="col-4 mb-3">
+                        <label class="form-label" for="mKode">Kode</label>
+                        <input class="form-control text-uppercase fw-bold" name="Kode" id="mKode" maxlength="3" minlength="3"
+                               pattern="[A-Za-z]{3}" title="3 huruf, mis. GPE" required placeholder="GPE" />
+                    </div>
+                    <div class="col-8 mb-3">
+                        <label class="form-label" for="mNama">Nama perusahaan</label>
+                        <input class="form-control" name="Nama" id="mNama" maxlength="150" required placeholder="mis. PT Gerbang Perkasa Energi" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="mKet">Keterangan <span class="text-muted small">(opsional)</span></label>
+                    <input class="form-control" name="Keterangan" id="mKet" maxlength="250" placeholder="mis. kontraktor hauling" />
+                </div>
+                <div class="alert alert-warning py-2 small d-none" id="mKodeInfo"></div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" name="IsActive" id="mActive" value="true" checked />
+                    <input type="hidden" name="IsActive" value="false" />
+                    <label class="form-check-label" for="mActive">Aktif</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const kode = document.getElementById('mKode');
+            const info = document.getElementById('mKodeInfo');
+            let originalKode = '', count = 0;
+
+            const refreshInfo = () => {
+                const changed = originalKode && kode.value.toUpperCase() !== originalKode && count > 0;
+                info.classList.toggle('d-none', !changed);
+                info.textContent = `Kode diganti: ID ${count} karyawan mitra ikut berubah, mis. ${originalKode}-3450 → ${kode.value.toUpperCase()}-3450.`;
+            };
+
+            kode.addEventListener('input', () => {
+                kode.value = kode.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3);
+                refreshInfo();
+            });
+
+            document.getElementById('mitraModal').addEventListener('show.bs.modal', (e) => {
+                const b = e.relatedTarget.dataset;
+                const isEdit = b.mode === 'edit';
+                document.getElementById('mitraModalTitle').textContent = isEdit ? 'Ubah Mitra' : 'Tambah Mitra';
+                document.getElementById('mId').value = isEdit ? b.id : 0;
+                kode.value = isEdit ? (b.kode || '') : '';
+                document.getElementById('mNama').value = isEdit ? (b.nama || '') : '';
+                document.getElementById('mKet').value = isEdit ? (b.ket || '') : '';
+                document.getElementById('mActive').checked = isEdit ? b.active === 'true' : true;
+                originalKode = isEdit ? (b.kode || '') : '';
+                count = isEdit ? Number(b.count || 0) : 0;
+                refreshInfo();
+            });
+        })();
+    </script>
+}

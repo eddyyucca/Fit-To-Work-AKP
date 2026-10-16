@@ -1,0 +1,55 @@
+@model Medicine
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Kartu Stok " + Model.Name;
+    Layout = "_AdminLayout";
+    var movements = (List<MedicineStockMovement>)ViewBag.Movements;
+}
+
+<div class="mb-4">
+    <a asp-controller="Medicines" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Obat &amp; Stok</a>
+    <h4 class="mb-0 mt-1">Kartu Stok — @Model.Name</h4>
+    <div class="text-muted">Stok saat ini: <strong class="@(Model.IsLowStock ? "text-danger" : "")">@Model.Stok.ToString("N0") @Model.Satuan</strong> · minimum @Model.StokMinimum</div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" data-order='[[0,"desc"]]'>
+            <thead class="table-light">
+                <tr>
+                    <th>Waktu</th>
+                    <th>Jenis</th>
+                    <th class="text-end">Masuk</th>
+                    <th class="text-end">Keluar</th>
+                    <th class="text-end">Stok Akhir</th>
+                    <th>Keterangan</th>
+                    <th>Petugas</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var mv in movements)
+                {
+                    <tr>
+                        <td class="text-nowrap" data-order="@mv.CreatedAt.ToString("o")">@Clock.ToLocal(mv.CreatedAt).ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@StockMovementTypes.Label(mv.Type)</td>
+                        <td class="text-end text-success">@(mv.Qty > 0 ? mv.Qty.ToString("N0") : "")</td>
+                        <td class="text-end text-danger">@(mv.Qty < 0 ? (-mv.Qty).ToString("N0") : "")</td>
+                        <td class="text-end fw-semibold">@mv.StokSetelah.ToString("N0")</td>
+                        <td>
+                            @mv.Keterangan
+                            @if (mv.ClinicVisitId.HasValue)
+                            {
+                                <a class="small ms-1" asp-controller="ClinicVisits" asp-action="Detail" asp-route-id="@mv.ClinicVisitId">lihat kunjungan</a>
+                            }
+                        </td>
+                        <td>@mv.AdminName</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (movements.Count >= 500)
+    {
+        <div class="card-footer small text-muted">Menampilkan 500 mutasi terakhir.</div>
+    }
+</div>

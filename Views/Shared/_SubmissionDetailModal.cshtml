@@ -1,0 +1,36 @@
+@*
+    Modal detail pengisian Fit To Work - dipakai bersama oleh Dashboard & Riwayat Pengisian.
+    Cara pakai di view mana pun:
+      1. <partial name="_SubmissionDetailModal" />
+      2. <script src="~/js/submission-detail.js" asp-append-version="true"></script>
+      3. Tombol: <button type="button" data-submission-detail="@@id">Detail</button>
+    URL dibuat di sini lewat Url.Action (dengan id), jadi tiap halaman tidak perlu menulis URL sendiri.
+*@
+<style>
+    #submissionDetailModal dt { font-weight: 500; color: #6c757d; }
+    #submissionDetailModal dd { margin-bottom: .6rem; }
+</style>
+
+<div class="modal fade" id="submissionDetailModal" tabindex="-1" aria-labelledby="submissionDetailTitle" aria-hidden="true"
+     data-json-url="@Url.Action("DetailJson", "History", new { id = 0 })"
+     data-page-url="@Url.Action("Detail", "History", new { id = 0 })">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0" id="submissionDetailTitle">Detail Pengisian</h5>
+                    <div class="small text-muted" id="submissionDetailSubtitle"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <div id="submissionDetailStatus" class="mb-3"></div>
+                <dl class="row mb-0" id="submissionDetailBody"></dl>
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-outline-secondary btn-sm me-auto" id="submissionDetailFullLink" href="#" target="_blank" rel="noopener">Buka halaman penuh ↗</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>

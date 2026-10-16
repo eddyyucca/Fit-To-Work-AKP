@@ -1,0 +1,149 @@
+@model GymAttendance
+@using FitToWorkApp.Services
+@inject IAppClock Clock
+@{
+    // Mode: "checkin" (setelah mulai, aktivitas tanpa GPS) atau "checkout" (setelah selesai: durasi, jarak, rute)
+    var isCheckout = ViewBag.Mode as string == "checkout";
+    ViewData["Title"] = isCheckout ? $"{Model.Aktivitas} selesai" : $"{Model.Aktivitas} dimulai";
+    Layout = null; // halaman berdiri sendiri (seperti Form/Success)
+    var mulai = Clock.ToLocal(Model.CreatedAt);
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var hasRoute = isCheckout && !string.IsNullOrEmpty(Model.RutePolyline);
+    // Halaman dengan peta tidak otomatis kembali ke menu (karyawan mungkin masih melihat rute)
+    int? seconds = hasRoute ? null : isCheckout ? 8 : 6;
+    var pace = GymRules.FormatPace(Model.DurasiDetik, Model.JarakTempuhMeter);
+    var speed = GymRules.FormatSpeed(Model.DurasiDetik, Model.JarakTempuhMeter);
+}
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - AKP Sehat</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@fontsource/source-sans-3@5.0.12/index.css" />
+    <link rel="stylesheet" href="~/lib/adminlte/css/adminlte.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/akp-theme.css" asp-append-version="true" />
+    @if (hasRoute)
+    {
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+        <style>#doneMap { height: 260px; border-radius: .5rem; background: #f1f3f5; }</style>
+    }
+</head>
+<body class="akp-auth-bg">
+    <div class="container pt-4 pb-4">
+        <div class="row justify-content-center">
+            <div class="col-md-7 col-lg-6">
+                <div class="text-center mb-3"><img src="~/images/akp-sehat-logo.png" alt="AKP Sehat" style="max-width:110px" /></div>
+                <div class="card akp-auth-card text-center">
+                    <div class="card-body p-4">
+                        <div style="font-size:3rem;">@(isCheckout ? "🏁" : Model.Ikon)</div>
+                        @if (isCheckout)
+                        {
+                            var selesai = Clock.ToLocal(Model.CheckOutAt!.Value);
+                            <h4 class="mt-2">Mantap, @Model.NamaSnapshot!</h4>
+                            <p class="text-muted">@Model.Aktivitas selesai dicatat. Sampai jumpa di sesi berikutnya 💪</p>
+                            <div class="row g-2 mb-3">
+                                <div class="@(Model.IsGps ? "col-6" : "col-12")">
+                                    <div class="alert alert-primary mb-0 h-100">
+                                        <div class="small">Durasi</div>
+                                        <div class="fs-3 fw-semibold">@GymRules.FormatDuration(Model.DurasiMenit)</div>
+                                        <div class="small">@mulai.ToString("HH:mm") &rarr; @selesai.ToString("HH:mm")</div>
+                                    </div>
+                                </div>
+                                @if (Model.IsGps)
+                                {
+                                    <div class="col-6">
+                                        <div class="alert alert-success mb-0 h-100">
+                                            <div class="small">Jarak</div>
+                                            <div class="fs-3 fw-semibold">@(Model.JarakTempuhMeter is null ? "-" : GymRules.FormatDistance(Model.JarakTempuhMeter))</div>
+                                            <div class="small">@(pace ?? speed ?? "")@(pace is not null && speed is not null ? " · " + speed : "")</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            @if (Model.IsGps && Model.JarakTempuhMeter is null)
+                            {
+                                <div class="alert alert-warning small text-start">
+                                    Jarak tidak tercatat karena tidak ada titik GPS yang terekam (izin lokasi ditolak / GPS mati / layar terkunci).
+                                </div>
+                            }
+                            else if (Model.GpsCelahDetik is int celah && celah >= 60)
+                            {
+                                <div class="alert alert-light border small text-start">
+                                    GPS sempat berhenti ±@(Math.Max(1, (int)Math.Round(celah / 60d))) menit (layar terkunci / sinyal hilang).
+                                    Jarak di jeda itu dihitung garis lurus.
+                                </div>
+                            }
+                            @if (hasRoute)
+                            {
+                                <div id="doneMap" class="mb-3" data-polyline="@Model.RutePolyline" aria-label="Peta rute"></div>
+                            }
+                        }
+                        else
+                        {
+                            <h4 class="mt-2">Selamat berolahraga, @Model.NamaSnapshot!</h4>
+                            <p class="text-muted">@Model.Aktivitas dimulai pukul <strong>@mulai.ToString("HH:mm")</strong>.</p>
+                            @if (Model.BeratBadan is decimal bb)
+                            {
+                                <div class="alert alert-primary mb-2">
+                                    Berat badan tercatat: <strong>@bb.ToString("0.0", inv) kg</strong>
+                                </div>
+                            }
+                            <div class="alert alert-warning small mb-3">
+                                Setelah selesai, buka aplikasi ini lagi lalu pilih <strong>Aktivitas Kebugaran &rarr; Selesai</strong>.
+                                Batas pukul <strong>@Clock.ToLocal(GymRules.DeadlineUtc(Model)).ToString("HH:mm")</strong>.
+                            </div>
+                        }
+
+                        @if (seconds is int s)
+                        {
+                            <p class="text-muted small mb-3">
+                                Anda akan otomatis kembali ke menu utama dalam <span id="countdown">@s</span> detik.
+                            </p>
+                        }
+
+                        <a asp-controller="Menu" asp-action="Index" class="btn btn-primary w-100">Kembali ke Menu</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Rekaman GPS sesi ini sudah tersimpan di server -> hapus dari HP
+        try { window.localStorage.removeItem('akp-track-@Model.Id'); } catch (e) { }
+    </script>
+    @if (hasRoute)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="~/js/fitness-track.js" asp-append-version="true"></script>
+        <script src="~/js/route-map.js" asp-append-version="true"></script>
+        <script>
+            (function () {
+                var el = document.getElementById('doneMap');
+                if (window.AKP_ROUTE) AKP_ROUTE.render(el, el.dataset.polyline);
+            })();
+        </script>
+    }
+    @if (seconds is int sec)
+    {
+        <script>
+            (function () {
+                var seconds = @sec;
+                var countdownEl = document.getElementById('countdown');
+                var timer = setInterval(function () {
+                    seconds--;
+                    countdownEl.textContent = seconds;
+                    if (seconds <= 0) {
+                        clearInterval(timer);
+                        window.location.href = '@Url.Action("Index", "Menu")';
+                    }
+                }, 1000);
+            })();
+        </script>
+    }
+</body>
+</html>

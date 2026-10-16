@@ -1,0 +1,133 @@
+@model List<HealthCheckup>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Follow Up Pemkes";
+    Layout = "_AdminLayout";
+    string status = ViewBag.Status;
+    DateTime today = ViewBag.Today;
+    var counts = (FitToWorkApp.Repositories.FollowUpCounts)ViewBag.Counts;
+    var tabs = new (string Key, string Label, int? Count, string Badge)[]
+    {
+        ("open", "Belum selesai", counts.Open, "bg-primary"),
+        ("overdue", "Terlambat", counts.Overdue, "bg-danger"),
+        ("today", "Hari ini", counts.Today, "bg-warning text-dark"),
+        ("done", "Selesai", null, ""),
+        ("all", "Semua", null, "")
+    };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Follow Up Pemeriksaan Kesehatan</h4>
+        <div class="text-muted small">Pemeriksaan dengan temuan yang perlu ditindaklanjuti. Jadwal diatur di form / detail pemeriksaan.</div>
+    </div>
+    <a class="btn btn-primary btn-sm" asp-controller="Checkups" asp-action="Create">+ Input Pemeriksaan</a>
+</div>
+
+<ul class="nav nav-pills mb-3 flex-nowrap overflow-auto">
+    @foreach (var t in tabs)
+    {
+        <li class="nav-item">
+            <a class="nav-link text-nowrap @(status == t.Key ? "active" : "")" asp-controller="Checkups" asp-action="FollowUps" asp-route-status="@t.Key">
+                @t.Label
+                @if (t.Count is > 0)
+                {
+                    <span class="badge @t.Badge ms-1">@t.Count</span>
+                }
+            </a>
+        </li>
+    }
+</ul>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle datatable" data-order='[]'>
+            <thead class="table-light">
+                <tr>
+                    <th>Tgl Follow Up</th>
+                    <th>Status</th>
+                    <th>Karyawan</th>
+                    <th>Department</th>
+                    <th>Tgl Pemeriksaan</th>
+                    <th>Temuan / Rencana</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Model)
+                {
+                    var st = c.FollowUpStatus(today);
+                    <tr>
+                        <td class="text-nowrap" data-order="@(c.FollowUpDate?.ToString("yyyyMMdd") ?? "99999999")">
+                            <span class="@(st == FollowUpStatuses.Terlambat ? "text-danger fw-semibold" : "")">@c.FollowUpDate?.ToString("dd/MM/yyyy")</span>
+                            @if (st == FollowUpStatuses.Terlambat && c.FollowUpDate.HasValue)
+                            {
+                                <div class="small text-danger">lewat @((today - c.FollowUpDate.Value.Date).Days) hari</div>
+                            }
+                        </td>
+                        <td><span class="badge @FollowUpStatuses.BadgeClass(st)">@FollowUpStatuses.Label(st)</span></td>
+                        <td>
+                            <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@c.EmployeeId" class="fw-semibold text-decoration-none">@c.NamaSnapshot</a>
+                            <div class="small text-muted">@c.NIP</div>
+                        </td>
+                        <td class="small">@c.DepartmentSnapshot</td>
+                        <td class="text-nowrap" data-order="@c.ExaminedAt.ToString("yyyyMMddHHmm")">@Clock.ToLocal(c.ExaminedAt).ToString("dd/MM/yyyy")</td>
+                        <td class="small" style="min-width:16rem">
+                            @c.TemuanKeterangan
+                            @if (c.FollowUpDoneAt.HasValue)
+                            {
+                                <div class="text-success mt-1">✔ @c.FollowUpHasil <span class="text-muted">(@c.FollowUpDoneBy, @Clock.ToLocal(c.FollowUpDoneAt.Value).ToString("dd/MM/yyyy"))</span></div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (!c.FollowUpDoneAt.HasValue)
+                            {
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#doneModal"
+                                        data-id="@c.Id" data-nama="@c.NamaSnapshot" data-temuan="@c.TemuanKeterangan">Selesai</button>
+                            }
+                            <a class="btn btn-sm btn-outline-secondary" asp-controller="Checkups" asp-action="Detail" asp-route-id="@c.Id">Detail</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal tandai selesai -->
+<div class="modal fade" id="doneModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" id="doneForm" action="#">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnTo" value="list" />
+            <div class="modal-header">
+                <h5 class="modal-title">Follow up selesai: <span id="doneNama"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-muted mb-2" id="doneTemuan"></div>
+                <label class="form-label" for="doneHasil">Hasil / tindakan follow up</label>
+                <textarea id="doneHasil" name="hasil" class="form-control" rows="3" maxlength="1000" required></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-success">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const baseUrl = '@Url.Action("FollowUpDone", "Checkups", new { id = 0 })'.replace(/\/0$/, '/');
+            document.getElementById('doneModal').addEventListener('show.bs.modal', (e) => {
+                const b = e.relatedTarget;
+                document.getElementById('doneForm').action = baseUrl + b.dataset.id;
+                document.getElementById('doneNama').textContent = b.dataset.nama;
+                document.getElementById('doneTemuan').textContent = b.dataset.temuan || '';
+                document.getElementById('doneHasil').value = '';
+            });
+        })();
+    </script>
+}

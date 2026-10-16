@@ -1,0 +1,118 @@
+.form-section-title {
+    border-left: 4px solid #1a8fd8;
+    padding-left: .75rem;
+    margin-top: 1.75rem;
+    margin-bottom: 1rem;
+}
+.readonly-field {
+    background-color: #e9ecef;
+}
+
+/* =========================================================
+   Kartu pilihan (dipakai untuk radio & checkbox di form
+   Fit To Work) - dibuat besar & mudah di-tap untuk mobile.
+   ========================================================= */
+.choice-group {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.choice-group.choice-inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+.choice-group.choice-inline .choice-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.choice-btn {
+    display: block;
+    position: relative;
+}
+.choice-btn input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+.choice-btn .choice-label {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
+    padding: .75rem 1rem;
+    border: 2px solid #dee2e6;
+    border-radius: .6rem;
+    background: #fff;
+    cursor: pointer;
+    font-size: .95rem;
+    line-height: 1.35;
+    min-height: 48px;
+    transition: border-color .15s ease, background-color .15s ease, transform .1s ease;
+    user-select: none;
+}
+.choice-btn .choice-label::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 2px solid #adb5bd;
+    border-radius: 50%;
+    background: #fff;
+    transition: border-color .15s ease, background-color .15s ease;
+}
+.choice-btn input[type="checkbox"] + .choice-label::before {
+    border-radius: .3rem;
+}
+.choice-btn input:checked + .choice-label {
+    border-color: #1a8fd8;
+    background: #e8f5fd;
+    color: #1b3a6b;
+    font-weight: 600;
+}
+.choice-btn input:checked + .choice-label::before {
+    border-color: #1a8fd8;
+    background: #1a8fd8;
+    box-shadow: inset 0 0 0 3px #fff;
+}
+.choice-btn .choice-label:active {
+    transform: scale(0.98);
+}
+.choice-btn input:focus-visible + .choice-label {
+    outline: 2px solid #1a8fd8;
+    outline-offset: 2px;
+}
+
+/* Tombol Kirim menempel di bawah layar khusus mobile, supaya gampang dijangkau jempol */
+@media (max-width: 767.98px) {
+    .mobile-sticky-submit {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        padding: .75rem 1rem;
+        margin: 1rem -1rem -1rem -1rem;
+        box-shadow: 0 -4px 10px rgba(0, 0, 0, .08);
+        z-index: 20;
+    }
+    .form-card-body {
+        padding: 1rem !important;
+    }
+}
+
+/* Cegah auto-zoom di iOS Safari saat fokus ke input/select */
+.akp-kiosk input.form-control,
+.akp-kiosk select.form-select,
+.akp-kiosk textarea.form-control {
+    font-size: 16px;
+}
+
+/* Kategori risiko pemkes "Risiko Tinggi" (Bootstrap tidak punya warna oranye bawaan) */
+.bg-orange {
+    background-color: #fd7e14 !important;
+    color: #fff !important;
+}
+
+/* Sub menu bertingkat di sidebar (Master Data > Mitra > ...): menjorok ke dalam */
+.sidebar-menu .nav-treeview .nav-treeview > .nav-item > .nav-link { padding-left: 2rem; }

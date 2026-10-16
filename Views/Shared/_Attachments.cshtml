@@ -1,0 +1,52 @@
+@* Daftar lampiran hasil pemeriksaan (PDF/foto) + form upload. Dipakai di detail pemkes, detail tes urin/alkohol & portal karyawan. *@
+@model AttachmentListViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@inject FitToWorkApp.Services.IMedicalFileStorage Storage
+@{
+    string ViewUrl(MedicalAttachment a, bool download) => Model.PortalMode
+        ? Url.Action("Attachment", "Portal", new { id = a.Id, download = download ? true : (bool?)null })!
+        : Url.Action("Get", "Attachments", new { id = a.Id, download = download ? true : (bool?)null })!;
+}
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">📎 Lampiran hasil pemeriksaan (@Model.Items.Count)</span>
+    </div>
+    <ul class="list-group list-group-flush">
+        @foreach (var a in Model.Items)
+        {
+            <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="text-truncate" style="max-width:65%">
+                    <span class="me-1">@(a.IsImage ? "🖼️" : "📄")</span>
+                    <a href="@ViewUrl(a, false)" target="_blank" rel="noopener" class="text-decoration-none">@a.FileName</a>
+                    <div class="small text-muted">@a.SizeLabel · @Clock.ToLocal(a.UploadedAt).ToString("dd/MM/yyyy HH:mm")@(string.IsNullOrEmpty(a.UploadedBy) ? "" : " · " + a.UploadedBy)</div>
+                </div>
+                <div class="d-flex gap-1">
+                    <a href="@ViewUrl(a, true)" class="btn btn-sm btn-outline-secondary">Download</a>
+                    @if (Model.CanEdit)
+                    {
+                        <form asp-controller="Attachments" asp-action="Delete" asp-route-id="@a.Id" method="post"
+                              data-confirm="Hapus lampiran &quot;@a.FileName&quot;?" data-confirm-ok="Ya, Hapus">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                        </form>
+                    }
+                </div>
+            </li>
+        }
+        @if (Model.Items.Count == 0)
+        {
+            <li class="list-group-item text-muted small">Belum ada lampiran.</li>
+        }
+    </ul>
+    @if (Model.CanEdit)
+    {
+        <div class="card-body border-top">
+            <form asp-controller="Attachments" asp-action="Upload" method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2">
+                <input type="hidden" name="entityType" value="@Model.EntityType" />
+                <input type="hidden" name="entityId" value="@Model.EntityId" />
+                <input type="file" name="files" class="form-control form-control-sm" style="max-width:24rem" multiple required accept="@Storage.AcceptAttribute" />
+                <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+            </form>
+            <div class="form-text">PDF, JPG atau PNG, maks. @(Storage.MaxFileBytes / 1024 / 1024) MB per file, @Storage.MaxFilesPerUpload file sekali upload.</div>
+        </div>
+    }
+</div>

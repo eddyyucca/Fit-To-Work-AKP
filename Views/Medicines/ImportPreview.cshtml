@@ -1,0 +1,90 @@
+@model FitToWorkApp.Services.StockImportResult
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Pratinjau Import Stok Obat";
+    Layout = "_AdminLayout";
+    string token = ViewBag.Token;
+    var errors = Model.Rows.Count(r => r.Status == StockImportStatus.Error);
+}
+
+<div class="mb-3">
+    <a asp-controller="Medicines" asp-action="Import" class="small text-decoration-none">‹ Upload file lain</a>
+    <h4 class="mb-0 mt-1">Pratinjau Import Stok Obat</h4>
+    <div class="text-muted small">File: @Model.FileName · @Model.Rows.Count baris dibaca</div>
+</div>
+
+@foreach (var e in Model.FileErrors)
+{
+    <div class="alert alert-danger">@e</div>
+}
+
+@if (Model.FileErrors.Count == 0)
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        @foreach (var g in Model.Rows.GroupBy(r => r.Status))
+        {
+            <span class="badge @StockImportStatus.BadgeClass(g.Key) fs-6 fw-normal">@StockImportStatus.Label(g.Key): @g.Count()</span>
+        }
+    </div>
+
+    @if (errors > 0)
+    {
+        <div class="alert alert-danger">
+            <b>@errors baris error.</b> Tidak ada yang bisa disimpan sebelum semua error diperbaiki. Perbaiki file lalu upload ulang.
+        </div>
+    }
+    else if (Model.ChangeCount == 0)
+    {
+        <div class="alert alert-warning">Tidak ada perubahan stok di file (kolom Jumlah kosong semua).</div>
+    }
+    else
+    {
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span><b>@Model.ChangeCount obat</b> akan diperbarui. Periksa dulu kolom "Stok Baru" di bawah.</span>
+            <form asp-controller="Medicines" asp-action="ImportConfirm" method="post"
+                  data-confirm="Simpan perubahan stok @Model.ChangeCount obat?" data-confirm-ok="Ya, Simpan">
+                <input type="hidden" name="token" value="@token" />
+                <button type="submit" class="btn btn-primary">💾 Simpan Perubahan Stok</button>
+            </form>
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle datatable" data-order='[]'>
+                <thead class="table-light small">
+                    <tr>
+                        <th>Baris</th>
+                        <th>Status</th>
+                        <th>Nama Obat</th>
+                        <th>Jenis</th>
+                        <th class="text-end">Jumlah</th>
+                        <th class="text-end">Stok Lama</th>
+                        <th class="text-end">Stok Baru</th>
+                        <th class="text-end">Selisih</th>
+                        <th>Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows.OrderBy(r => r.Status == StockImportStatus.Error ? 0 : r.AdaPerubahan ? 1 : 2).ThenBy(r => r.RowNumber))
+                    {
+                        var err = r.Status == StockImportStatus.Error;
+                        <tr class="@(err ? "table-danger" : r.AdaPerubahan ? "" : "text-muted")">
+                            <td data-order="@r.RowNumber">@r.RowNumber</td>
+                            <td><span class="badge @StockImportStatus.BadgeClass(r.Status)">@StockImportStatus.Label(r.Status)</span></td>
+                            <td class="fw-semibold">@r.Nama <span class="small text-muted fw-normal">@r.Satuan</span></td>
+                            <td class="small">@(r.Jumlah.HasValue ? r.Jenis : "-")</td>
+                            <td class="text-end">@(r.Jumlah?.ToString("N0") ?? "-")</td>
+                            <td class="text-end">@(err ? "" : r.StokLama.ToString("N0"))</td>
+                            <td class="text-end fw-semibold">@(err ? "" : r.StokBaru.ToString("N0"))</td>
+                            <td class="text-end @(r.Selisih < 0 ? "text-danger" : r.Selisih > 0 ? "text-success" : "")">
+                                @(err || r.Selisih == 0 ? "" : r.Selisih.ToString("+#,0;-#,0"))
+                            </td>
+                            <td class="small">@r.Pesan @if (!string.IsNullOrEmpty(r.Keterangan)) { <div class="text-muted">@r.Keterangan</div> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

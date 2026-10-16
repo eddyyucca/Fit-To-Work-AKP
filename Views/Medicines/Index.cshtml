@@ -1,0 +1,217 @@
+@model List<Medicine>
+@{
+    ViewData["Title"] = "Obat & Stok";
+    Layout = "_AdminLayout";
+    var lowCount = Model.Count(m => m.IsActive && m.IsLowStock);
+    var satuanOptions = (List<string>)ViewBag.SatuanOptions;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Obat &amp; Stok</h4>
+        <div class="text-muted small">Stok berkurang otomatis saat obat diberikan di Kunjungan Klinik, dan kembali kalau kunjungan dibatalkan.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-success" asp-controller="Medicines" asp-action="Import">📥 Update Stok dari Excel</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#medModal" data-mode="create">+ Tambah Obat</button>
+    </div>
+</div>
+
+@if (lowCount > 0)
+{
+    <div class="alert alert-warning py-2">⚠️ <strong>@lowCount obat</strong> stoknya di bawah / sama dengan stok minimum.</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr>
+                    <th>Nama Obat</th>
+                    <th>Satuan</th>
+                    <th class="text-end">Stok</th>
+                    <th class="text-end">Min.</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Model)
+                {
+                    <tr class="@(m.IsActive ? "" : "text-muted")">
+                        <td>
+                            <div class="fw-semibold">@m.Name</div>
+                            @if (!string.IsNullOrEmpty(m.Keterangan))
+                            {
+                                <div class="small text-muted">@m.Keterangan</div>
+                            }
+                        </td>
+                        <td>@m.Satuan</td>
+                        <td class="text-end" data-order="@m.Stok">
+                            <span class="fw-semibold @(m.IsActive && m.IsLowStock ? "text-danger" : "")">@m.Stok.ToString("N0")</span>
+                            @if (m.IsActive && m.IsLowStock)
+                            {
+                                <span class="badge bg-danger ms-1">Menipis</span>
+                            }
+                        </td>
+                        <td class="text-end">@m.StokMinimum</td>
+                        <td>@(m.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#stockModal"
+                                    data-mode="masuk" data-id="@m.Id" data-name="@m.Name" data-satuan="@m.Satuan" data-stok="@m.Stok">+ Stok</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#stockModal"
+                                    data-mode="opname" data-id="@m.Id" data-name="@m.Name" data-satuan="@m.Satuan" data-stok="@m.Stok">Opname</button>
+                            <a class="btn btn-sm btn-outline-secondary" asp-controller="Medicines" asp-action="Card" asp-route-id="@m.Id">Kartu Stok</a>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#medModal"
+                                    data-mode="edit" data-id="@m.Id" data-name="@m.Name" data-satuan="@m.Satuan" data-keterangan="@m.Keterangan"
+                                    data-min="@m.StokMinimum" data-active="@(m.IsActive ? "true" : "false")">Ubah</button>
+                            <form asp-controller="Medicines" asp-action="ToggleActive" asp-route-id="@m.Id" method="post" class="d-inline">
+                                <input type="hidden" name="activate" value="@(m.IsActive ? "false" : "true")" />
+                                <button type="submit" class="btn btn-sm @(m.IsActive ? "btn-outline-danger" : "btn-outline-success")">@(m.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tambah / ubah obat -->
+<div class="modal fade" id="medModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" asp-controller="Medicines" asp-action="Save" method="post">
+            <div class="modal-header">
+                <h5 class="modal-title" id="medModalTitle">Tambah Obat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Id" id="mId" value="0" />
+                <div class="mb-3">
+                    <label class="form-label" for="mName">Nama Obat</label>
+                    <input class="form-control" name="Name" id="mName" maxlength="150" required placeholder="mis. Paracetamol 500 mg" />
+                </div>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label" for="mSatuan">Satuan</label>
+                        <select class="form-select" name="Satuan" id="mSatuan" required>
+                            <option value="">- Pilih satuan -</option>
+                            @foreach (var s in satuanOptions)
+                            {
+                                <option value="@s">@s</option>
+                            }
+                        </select>
+                        <div class="form-text"><a asp-controller="MedicineUnits" asp-action="Index">Kelola satuan</a></div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label" for="mMin">Stok Minimum</label>
+                        <input class="form-control" type="number" min="0" name="StokMinimum" id="mMin" value="0" required />
+                        <div class="form-text">Batas peringatan stok menipis</div>
+                    </div>
+                </div>
+                <div class="mb-3" id="mStokAwalGroup">
+                    <label class="form-label" for="mStokAwal">Stok Awal</label>
+                    <input class="form-control" type="number" min="0" name="StokAwal" id="mStokAwal" value="0" />
+                    <div class="form-text">Setelah disimpan, stok hanya bisa diubah lewat tombol <em>+ Stok</em> atau <em>Opname</em>.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="mKet">Keterangan</label>
+                    <input class="form-control" name="Keterangan" id="mKet" maxlength="250" placeholder="Opsional, mis. golongan / catatan penyimpanan" />
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" name="IsActive" id="mActive" value="true" checked />
+                    <input type="hidden" name="IsActive" value="false" />
+                    <label class="form-check-label" for="mActive">Aktif (bisa dipilih saat kunjungan)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stok masuk / opname -->
+<div class="modal fade" id="stockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" id="stockForm" data-base="@Url.Action("Stock", "Medicines", new { id = 0 })">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="mode" id="sMode" />
+            <div class="modal-header">
+                <h5 class="modal-title" id="stockModalTitle">Stok</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3"><span class="fw-semibold" id="sName"></span><br /><span class="text-muted small">Stok sistem saat ini: <strong id="sStok"></strong></span></p>
+                <div class="mb-3">
+                    <label class="form-label" for="sQty" id="sQtyLabel">Jumlah</label>
+                    <div class="input-group">
+                        <input class="form-control" type="number" min="0" name="qty" id="sQty" required />
+                        <span class="input-group-text" id="sSatuan"></span>
+                    </div>
+                    <div class="form-text" id="sHelp"></div>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label" for="sKet">Keterangan</label>
+                    <input class="form-control" name="keterangan" id="sKet" maxlength="250" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Nilai lama yang sudah dinonaktifkan di master tetap ditampilkan supaya tidak hilang saat disimpan
+        function setSelect(sel, value) {
+            sel.querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
+            if (value && ![...sel.options].some((o) => o.value === value)) {
+                const o = new Option(`${value} (nonaktif)`, value);
+                o.dataset.legacy = 'true';
+                sel.add(o);
+            }
+            sel.value = value;
+        }
+
+        document.getElementById('medModal').addEventListener('show.bs.modal', (e) => {
+            const b = e.relatedTarget.dataset;
+            const isEdit = b.mode === 'edit';
+            document.getElementById('medModalTitle').textContent = isEdit ? 'Ubah Obat' : 'Tambah Obat';
+            document.getElementById('mId').value = isEdit ? b.id : 0;
+            document.getElementById('mName').value = isEdit ? (b.name || '') : '';
+            const firstUnit = @Json.Serialize(satuanOptions.FirstOrDefault() ?? "");
+            setSelect(document.getElementById('mSatuan'), isEdit ? (b.satuan || '') : (@Json.Serialize(satuanOptions.Contains("tablet")) ? 'tablet' : firstUnit));
+            document.getElementById('mKet').value = isEdit ? (b.keterangan || '') : '';
+            document.getElementById('mMin').value = isEdit ? (b.min || 0) : 0;
+            document.getElementById('mStokAwal').value = 0;
+            document.getElementById('mStokAwalGroup').classList.toggle('d-none', isEdit);
+            document.getElementById('mActive').checked = isEdit ? b.active === 'true' : true;
+        });
+
+        document.getElementById('stockModal').addEventListener('show.bs.modal', (e) => {
+            const b = e.relatedTarget.dataset;
+            const form = document.getElementById('stockForm');
+            form.action = form.dataset.base.replace(/\/0$/, '/' + b.id);
+            const opname = b.mode === 'opname';
+            document.getElementById('sMode').value = b.mode;
+            document.getElementById('stockModalTitle').textContent = opname ? 'Stok Opname / Penyesuaian' : 'Stok Masuk';
+            document.getElementById('sName').textContent = b.name;
+            document.getElementById('sStok').textContent = `${b.stok} ${b.satuan}`;
+            document.getElementById('sSatuan').textContent = b.satuan;
+            document.getElementById('sQtyLabel').textContent = opname ? 'Jumlah fisik hasil hitung' : 'Jumlah masuk';
+            document.getElementById('sHelp').textContent = opname
+                ? 'Stok sistem akan diganti menjadi angka ini; selisihnya tercatat di kartu stok.'
+                : 'Akan ditambahkan ke stok saat ini.';
+            const qty = document.getElementById('sQty');
+            qty.min = opname ? 0 : 1;
+            qty.value = opname ? b.stok : '';
+            document.getElementById('sKet').value = '';
+            document.getElementById('sKet').placeholder = opname ? 'mis. Opname akhir bulan' : 'mis. No. faktur / dari gudang';
+        });
+    </script>
+}

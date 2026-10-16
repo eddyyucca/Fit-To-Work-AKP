@@ -1,0 +1,65 @@
+@model FitToWorkApp.Controllers.PortalLoginViewModel
+@{
+    ViewData["Title"] = "Riwayat Saya";
+    ViewData["AuthPage"] = true;
+}
+
+<div class="row justify-content-center">
+    <div class="col-sm-9 col-md-6 col-lg-5">
+        <partial name="_AuthLogo" model="@("Riwayat Saya")" />
+        <div class="card akp-auth-card">
+            <div class="card-body p-4">
+                <div class="text-center">
+                    <h5 class="mb-1"><i class="bi bi-clipboard2-pulse me-1"></i>Riwayat Saya</h5>
+                    <p class="text-muted small mb-4">Lihat riwayat Fit To Work, aktivitas kebugaran, pemeriksaan kesehatan &amp; kunjungan klinik Anda.</p>
+                </div>
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+                <form asp-controller="Portal" asp-action="Login" method="post" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="NIP">NIP</label>
+                        <input asp-for="NIP" class="form-control form-control-lg text-center" autofocus="@(string.IsNullOrEmpty(Model.NIP))" inputmode="text" placeholder="NIP" />
+                        <span asp-validation-for="NIP" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" asp-for="Password">Password</label>
+                        <div class="input-group input-group-lg">
+                            <input asp-for="Password" type="password" class="form-control text-center" autocomplete="current-password"
+                                   autofocus="@(!string.IsNullOrEmpty(Model.NIP))" placeholder="Password" id="portalPassword" />
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword" title="Tampilkan / sembunyikan password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <span asp-validation-for="Password" class="text-danger small"></span>
+                    </div>
+                    <div class="form-text mb-4">
+                        <i class="bi bi-info-circle me-1"></i>Pertama kali masuk? Password awal = <strong>tanggal lahir</strong>
+                        format <strong>ddmmyyyy</strong> (contoh lahir 17 Agustus 1990 → <code>17081990</code>), lalu Anda diminta membuat password baru.
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Masuk</button>
+                </form>
+
+                <p class="text-muted small mt-3 mb-0">
+                    Lupa password? Hubungi HR/admin untuk me-reset password ke tanggal lahir.
+                    Data kesehatan bersifat pribadi. Jangan lupa tekan <strong>Keluar</strong> setelah selesai, terutama di perangkat bersama.
+                </p>
+                <hr class="my-3" />
+                <p class="text-center small mb-0"><a asp-controller="Account" asp-action="EmployeeLogin">‹ Kembali ke Fit To Work / Aktivitas</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Tombol mata: tampilkan / sembunyikan password
+        document.getElementById('togglePassword').addEventListener('click', function () {
+            const input = document.getElementById('portalPassword');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            this.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+        });
+    </script>
+}

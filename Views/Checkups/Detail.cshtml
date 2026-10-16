@@ -1,0 +1,108 @@
+@model HealthCheckup
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Detail Pemeriksaan";
+    Layout = "_AdminLayout";
+    var attachments = (AttachmentListViewModel)ViewBag.Attachments;
+    DateTime today = ViewBag.Today;
+    DateTime suggested = ViewBag.SuggestedFollowUp;
+    var fuStatus = Model.FollowUpStatus(today);
+}
+
+<div class="mb-4">
+    <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId" class="small text-decoration-none">‹ Rekam medis @Model.NamaSnapshot</a>
+    <h4 class="mb-0 mt-1">Pemeriksaan Kesehatan</h4>
+    <div class="text-muted">@Model.NamaSnapshot · @Model.NIP · @Model.DepartmentSnapshot</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between">
+                <span class="fw-semibold">@Clock.ToLocal(Model.ExaminedAt).ToString("dd/MM/yyyy HH:mm")</span>
+                <span class="text-muted small">Pemeriksa: @Model.ExaminerName</span>
+            </div>
+            <div class="card-body">
+                <partial name="_CheckupValues" model="Model" />
+            </div>
+        </div>
+
+        <partial name="_Attachments" model="attachments" />
+    </div>
+    <div class="col-lg-5">
+        <!-- ================= Temuan & follow up ================= -->
+        <div class="card shadow-sm mb-3 @(fuStatus == FollowUpStatuses.Terlambat ? "border-danger" : "")">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">Temuan &amp; Follow Up</span>
+                @if (fuStatus is not null)
+                {
+                    <span class="badge @FollowUpStatuses.BadgeClass(fuStatus)">@FollowUpStatuses.Label(fuStatus)</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (Model.AdaTemuan)
+                {
+                    <div class="mb-2"><span class="text-muted small d-block">Keterangan temuan / rencana</span>@Model.TemuanKeterangan</div>
+                    <div class="mb-3"><span class="text-muted small d-block">Tanggal follow up</span><span class="fw-semibold">@Model.FollowUpDate?.ToString("dd/MM/yyyy")</span></div>
+
+                    @if (Model.FollowUpDoneAt.HasValue)
+                    {
+                        <div class="alert alert-success py-2 small mb-2">
+                            <div class="fw-semibold">Selesai @Clock.ToLocal(Model.FollowUpDoneAt.Value).ToString("dd/MM/yyyy HH:mm") oleh @Model.FollowUpDoneBy</div>
+                            <div>@Model.FollowUpHasil</div>
+                        </div>
+                        <form asp-controller="Checkups" asp-action="FollowUpReopen" asp-route-id="@Model.Id" method="post"
+                              data-confirm="Buka kembali follow up ini (status jadi belum selesai)?" data-confirm-ok="Ya, Buka Kembali">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Buka kembali</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form asp-controller="Checkups" asp-action="FollowUpDone" asp-route-id="@Model.Id" method="post" class="mb-3">
+                            <label class="form-label small mb-1" for="fuHasil">Hasil / tindakan follow up</label>
+                            <textarea id="fuHasil" name="hasil" class="form-control form-control-sm mb-2" rows="2" maxlength="1000" required
+                                      placeholder="mis. Tensi ulang 130/85, sudah konsultasi dokter, lanjut kontrol rutin"></textarea>
+                            <button type="submit" class="btn btn-sm btn-success">✔ Tandai follow up selesai</button>
+                        </form>
+                    }
+                    <button class="btn btn-sm btn-link px-0" type="button" data-bs-toggle="collapse" data-bs-target="#fuEdit">Ubah temuan / jadwal</button>
+                }
+                else
+                {
+                    <div class="text-muted small mb-2">Tidak ada temuan yang perlu follow up.</div>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#fuEdit">+ Tambah temuan &amp; jadwal follow up</button>
+                }
+
+                <div class="collapse mt-2" id="fuEdit">
+                    <form asp-controller="Checkups" asp-action="FollowUp" asp-route-id="@Model.Id" method="post" class="border rounded p-2">
+                        <input type="hidden" name="AdaTemuan" value="true" />
+                        <label class="form-label small mb-1" for="fuKet">Keterangan temuan / rencana follow up</label>
+                        <textarea id="fuKet" name="TemuanKeterangan" class="form-control form-control-sm mb-2" rows="2" maxlength="1000" required>@Model.TemuanKeterangan</textarea>
+                        <label class="form-label small mb-1" for="fuDate">Tanggal follow up</label>
+                        <input id="fuDate" name="FollowUpDate" type="date" class="form-control form-control-sm mb-2" required
+                               value="@((Model.FollowUpDate ?? suggested).ToString("yyyy-MM-dd"))" />
+                        <button type="submit" class="btn btn-sm btn-primary">Simpan</button>
+                    </form>
+                    @if (Model.AdaTemuan)
+                    {
+                        <form asp-controller="Checkups" asp-action="FollowUp" asp-route-id="@Model.Id" method="post" class="mt-2"
+                              data-confirm="Hapus temuan & jadwal follow up pemeriksaan ini?" data-confirm-ok="Ya, Hapus">
+                            <input type="hidden" name="AdaTemuan" value="false" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Hapus temuan</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2">
+            <a class="btn btn-primary" asp-controller="Checkups" asp-action="Create" asp-route-employeeId="@Model.EmployeeId">+ Pemeriksaan baru untuk karyawan ini</a>
+            <a class="btn btn-outline-secondary" asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId">Lihat rekam medis lengkap</a>
+            <a class="btn btn-outline-secondary" asp-controller="Checkups" asp-action="FollowUps">Daftar follow up pemkes</a>
+            <form asp-controller="Checkups" asp-action="Delete" asp-route-id="@Model.Id" method="post"
+                  data-confirm="Hapus hasil pemeriksaan ini beserta lampirannya? Gunakan hanya untuk koreksi salah input." data-confirm-ok="Ya, Hapus">
+                <button type="submit" class="btn btn-outline-danger w-100">Hapus (salah input)</button>
+            </form>
+        </div>
+    </div>
+</div>

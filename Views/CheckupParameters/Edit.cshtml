@@ -1,0 +1,209 @@
+@model FitToWorkApp.Controllers.Admin.CheckupParameterFormViewModel
+@using System.Globalization
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Tambah Parameter Pemkes" : "Ubah Parameter Pemkes";
+    Layout = "_AdminLayout";
+    string Inv(decimal? v) => v?.ToString("0.###", CultureInfo.InvariantCulture) ?? "";
+    var rows = Model.Criteria.Count > 0 ? Model.Criteria : new List<FitToWorkApp.Controllers.Admin.CriterionRow> { new() };
+}
+
+<div class="mb-4">
+    <a asp-controller="CheckupParameters" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Parameter &amp; Skor Pemkes</a>
+    <h4 class="mb-0 mt-1">@(isNew ? "Tambah Parameter" : "Ubah Parameter: " + Model.Name)</h4>
+    @if (Model.UsageCount > 0)
+    {
+        <div class="small text-muted">Sudah dipakai di @Model.UsageCount.ToString("N0") pemeriksaan. Perubahan hanya berlaku untuk pemeriksaan baru.</div>
+    }
+</div>
+
+<form asp-controller="CheckupParameters" asp-action="Save" method="post" id="paramForm" autocomplete="off">
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="Name">Nama parameter</label>
+                        <input asp-for="Name" class="form-control" maxlength="100" placeholder="mis. Kolesterol LDL" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="InputType">Tipe isian</label>
+                        <select asp-for="InputType" class="form-select" id="inputType">
+                            @foreach (var t in CheckupInputTypes.All)
+                            {
+                                <option value="@t">@CheckupInputTypes.Label(t)</option>
+                            }
+                        </select>
+                        <div class="form-text" id="typeHint"></div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <label class="form-label" asp-for="Unit">Satuan</label>
+                            <input asp-for="Unit" class="form-control" maxlength="30" placeholder="mis. mg/dL" />
+                        </div>
+                        <div class="col-5 type-num-only">
+                            <label class="form-label" asp-for="Decimals">Desimal</label>
+                            <input asp-for="Decimals" type="number" min="0" max="3" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3 type-number-only">
+                        <div class="col-6">
+                            <label class="form-label small" asp-for="MinInput">Input min.</label>
+                            <input asp-for="MinInput" type="number" step="any" class="form-control" value="@Inv(Model.MinInput)" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small" asp-for="MaxInput">Input maks.</label>
+                            <input asp-for="MaxInput" type="number" step="any" class="form-control" value="@Inv(Model.MaxInput)" />
+                        </div>
+                        <div class="col-12 form-text mt-0">Untuk mencegah salah ketik (mis. 1200 padahal 120). Kosongkan jika tidak perlu.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="Hint">Keterangan di form <span class="text-muted small">(opsional)</span></label>
+                        <input asp-for="Hint" class="form-control" maxlength="250" />
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" asp-for="SortOrder">Urutan</label>
+                            <input asp-for="SortOrder" type="number" min="0" max="9999" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" asp-for="IsScored" />
+                        <label class="form-check-label" asp-for="IsScored">Poin dihitung ke total skor</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" asp-for="IsActive" />
+                        <label class="form-check-label" asp-for="IsActive">Aktif (muncul di form pemkes)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Kriteria, Poin &amp; Warna</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="critAdd">+ Kriteria</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" id="critTable">
+                        <thead class="table-light small">
+                            <tr>
+                                <th class="col-num" style="width:95px">Dari (≥)</th>
+                                <th class="col-num" style="width:95px">Sampai (≤)</th>
+                                <th class="col-sex" style="width:120px">Jenis kelamin</th>
+                                <th class="col-label">Teks kriteria / pilihan</th>
+                                <th class="col-forsex" style="width:95px">Khusus</th>
+                                <th style="width:80px">Poin</th>
+                                <th style="width:150px">Warna</th>
+                                <th style="width:2.5rem"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in rows)
+                            {
+                                <tr class="crit-row">
+                                    <td class="col-num"><input type="number" step="any" class="form-control form-control-sm" data-field="MinValue" value="@Inv(r.MinValue)" /></td>
+                                    <td class="col-num"><input type="number" step="any" class="form-control form-control-sm" data-field="MaxValue" value="@Inv(r.MaxValue)" /></td>
+                                    <td class="col-sex">
+                                        <select class="form-select form-select-sm" data-field="MatchText">
+                                            <option value="">-</option>
+                                            <option value="L" selected="@(r.MatchText == "L")">Laki-laki</option>
+                                            <option value="P" selected="@(r.MatchText == "P")">Perempuan</option>
+                                        </select>
+                                    </td>
+                                    <td class="col-label"><input class="form-control form-control-sm" data-field="Label" value="@r.Label" maxlength="100" /></td>
+                                    <td class="col-forsex">
+                                        <select class="form-select form-select-sm" data-field="ForSex" title="Kriteria khusus pria / wanita">
+                                            <option value="">Semua</option>
+                                            <option value="L" selected="@(r.ForSex == "L")">L</option>
+                                            <option value="P" selected="@(r.ForSex == "P")">P</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="number" min="-100" max="100" class="form-control form-control-sm" data-field="Points" value="@(r.Points ?? 0)" /></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" data-field="Level">
+                                            @foreach (var l in CheckupLevels.All)
+                                            {
+                                                <option value="@l" selected="@(r.Level == l)">@CheckupLevels.Label(l)</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger crit-del" aria-label="Hapus kriteria">×</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body small text-muted" id="critHelp"></div>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary">Simpan Parameter</button>
+                <a asp-controller="CheckupParameters" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            const form = document.getElementById('paramForm');
+            const type = document.getElementById('inputType');
+            const tbody = document.querySelector('#critTable tbody');
+            const template = tbody.querySelector('.crit-row').cloneNode(true);
+
+            const hints = {
+                Number: 'Medic mengetik angka. Kriteria berupa rentang angka.',
+                Choice: 'Medic memilih salah satu pilihan (mis. Ya / Tidak). Setiap pilihan = satu kriteria.',
+                Age: 'Otomatis dihitung dari tanggal lahir karyawan pada tanggal pemeriksaan. Kriteria berupa rentang umur.',
+                Sex: 'Otomatis dari data karyawan. Isi satu kriteria untuk L dan satu untuk P.',
+                Bmi: 'Medic mengisi berat & tinggi badan, IMT dihitung otomatis. Kriteria berupa rentang IMT.'
+            };
+            const helps = {
+                num: 'Rentang: "Dari" & "Sampai" sama-sama TERMASUK (mis. 120 – 129). Kosongkan "Dari" untuk "kurang dari", kosongkan "Sampai" untuk "ke atas". ' +
+                     'Nilai dibulatkan sesuai jumlah desimal sebelum dicocokkan, jadi untuk 1 desimal pakai mis. 18,5 – 24,9 lalu 25,0 – 29,9. ' +
+                     'Teks kriteria boleh dikosongkan (dibuat otomatis). Kolom "Khusus" untuk batas yang berbeda pria / wanita.',
+                choice: 'Tulis teks pilihan persis seperti yang akan tampil di form, beserta poin & warnanya.',
+                sex: 'Pilih L / P dan poinnya. Teks boleh dikosongkan.'
+            };
+
+            function sync() {
+                const t = type.value;
+                const numeric = ['Number', 'Age', 'Bmi'].includes(t);
+                form.querySelectorAll('.col-num, .col-forsex').forEach((el) => el.classList.toggle('d-none', !numeric));
+                form.querySelectorAll('.col-sex').forEach((el) => el.classList.toggle('d-none', t !== 'Sex'));
+                form.querySelectorAll('.type-number-only').forEach((el) => el.classList.toggle('d-none', t !== 'Number'));
+                form.querySelectorAll('.type-num-only').forEach((el) => el.classList.toggle('d-none', !['Number', 'Bmi'].includes(t)));
+                document.getElementById('typeHint').textContent = hints[t] || '';
+                document.getElementById('critHelp').textContent = numeric ? helps.num : t === 'Sex' ? helps.sex : helps.choice;
+            }
+            type.addEventListener('change', sync);
+            sync();
+
+            document.getElementById('critAdd').addEventListener('click', () => {
+                const tr = template.cloneNode(true);
+                tr.querySelectorAll('input').forEach((i) => { i.value = i.dataset.field === 'Points' ? '0' : ''; });
+                tr.querySelectorAll('select').forEach((s) => { s.selectedIndex = 0; });
+                tbody.appendChild(tr);
+                sync();
+            });
+            tbody.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('crit-del')) return;
+                if (tbody.rows.length > 1) e.target.closest('tr').remove();
+            });
+
+            // Nama field berurutan: Criteria[0].MinValue, ... (kolom yang disembunyikan dikosongkan)
+            form.addEventListener('submit', () => {
+                [...tbody.rows].forEach((tr, i) => tr.querySelectorAll('[data-field]').forEach((el) => {
+                    el.name = `Criteria[${i}].${el.dataset.field}`;
+                    if (el.closest('td').classList.contains('d-none')) el.value = '';
+                }));
+            });
+        })();
+    </script>
+}

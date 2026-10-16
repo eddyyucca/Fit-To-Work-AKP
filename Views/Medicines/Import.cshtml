@@ -1,0 +1,62 @@
+@{
+    ViewData["Title"] = "Import Stok Obat";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-4">
+    <a asp-controller="Medicines" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Obat &amp; Stok</a>
+    <h4 class="mb-0 mt-1">Update Stok Obat dari Excel</h4>
+    <div class="text-muted small">Untuk penerimaan obat (stok masuk) atau stok opname banyak obat sekaligus.</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <ol class="small mb-4">
+                    <li class="mb-1">Unduh template. Isinya sudah berupa daftar semua obat aktif beserta stok saat ini.</li>
+                    <li class="mb-1">Isi kolom <b>Jumlah</b> hanya untuk obat yang berubah, lalu pilih <b>Jenis</b>:
+                        <ul>
+                            <li><b>MASUK</b>: stok <u>ditambah</u> sebanyak Jumlah (penerimaan obat).</li>
+                            <li><b>OPNAME</b>: stok <u>diganti</u> menjadi Jumlah (hasil hitung fisik).</li>
+                        </ul>
+                    </li>
+                    <li class="mb-1">Obat baru: tambahkan baris di bawah, isi Nama Obat, Satuan (dropdown) dan Jumlah sebagai stok awal.</li>
+                    <li class="mb-1">Upload file. Sistem menampilkan <b>pratinjau</b> dulu, dan stok baru berubah setelah Anda klik <b>Simpan</b>.</li>
+                </ol>
+
+                <a asp-controller="Medicines" asp-action="ImportTemplate" class="btn btn-outline-primary btn-sm mb-4">⬇️ Unduh Template (daftar obat saat ini)</a>
+
+                <form asp-controller="Medicines" asp-action="Import" method="post" enctype="multipart/form-data" id="importForm">
+                    <label class="form-label">File Excel (.xlsx)</label>
+                    <input type="file" name="file" class="form-control mb-3" accept=".xlsx" required />
+                    <button type="submit" class="btn btn-primary" id="importBtn">
+                        <span class="spinner-border spinner-border-sm me-1 d-none" id="importSpinner"></span>Cek File
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Perlu diperhatikan</div>
+            <div class="card-body small text-muted">
+                <ul class="ps-3 mb-0">
+                    <li>Obat dicocokkan berdasarkan <b>nama</b>. Jangan ubah nama obat yang sudah ada di template.</li>
+                    <li>Kolom "Stok Saat Ini" hanya info. Stok masuk ditambahkan ke stok <b>terkini</b> saat disimpan, jadi aman walau ada kunjungan klinik di antaranya.</li>
+                    <li>Kalau ada 1 baris error, <b>tidak ada</b> yang disimpan. Perbaiki file lalu upload ulang.</li>
+                    <li>Setiap perubahan tercatat di kartu stok dengan keterangan "import Excel".</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('importForm').addEventListener('submit', () => {
+            document.getElementById('importBtn').disabled = true;
+            document.getElementById('importSpinner').classList.remove('d-none');
+        });
+    </script>
+}

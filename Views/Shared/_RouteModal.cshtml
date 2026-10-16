@@ -1,0 +1,24 @@
+@* Modal peta rute aktivitas (GPS). Dipakai Riwayat Aktivitas admin, detail karyawan & Riwayat Saya.
+   Halaman pemakai wajib memuat: leaflet.css, leaflet.js, ~/js/fitness-track.js, ~/js/route-map.js,
+   lalu memanggil AKP_ROUTE.bindModal('<url dengan __ID__>'). Tombol pemicu: atribut data-route-id="{id}". *@
+<style>
+    #routeMap { height: 360px; border-radius: .5rem; background: #f1f3f5; }
+</style>
+<div class="modal fade" id="routeModal" tabindex="-1" aria-labelledby="routeTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="routeTitle">Rute aktivitas</h5>
+                    <div class="small text-muted" id="routeSub"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3" id="routeStats"></div>
+                <div id="routeMap" aria-label="Peta rute"></div>
+                <div class="small text-muted mt-2" id="routeNote"></div>
+            </div>
+        </div>
+    </div>
+</div>

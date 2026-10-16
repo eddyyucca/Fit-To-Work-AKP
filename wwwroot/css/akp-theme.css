@@ -1,0 +1,124 @@
+/*
+ * Tema AKP Sehat di atas AdminLTE 4 / Bootstrap 5.
+ * Warna diambil dari logo: biru langit, teal, navy, hijau daun.
+ * Cukup ubah variabel di :root untuk mengganti warna utama aplikasi.
+ */
+:root {
+    --akp-navy: #1b3a6b;
+    --akp-blue: #1a8fd8;
+    --akp-teal: #22b3a4;
+    --akp-green: #4caf50;
+    --akp-sky: #e8f5fd;
+
+    --bs-primary: var(--akp-blue);
+    --bs-primary-rgb: 26, 143, 216;
+    --bs-link-color: var(--akp-blue);
+    --bs-link-color-rgb: 26, 143, 216;
+    --bs-link-hover-color: var(--akp-navy);
+    --bs-link-hover-color-rgb: 27, 58, 107;
+    --bs-font-sans-serif: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---------- Tombol & utilitas warna primer ---------- */
+.btn-primary {
+    --bs-btn-bg: var(--akp-blue);
+    --bs-btn-border-color: var(--akp-blue);
+    --bs-btn-hover-bg: #1679b8;
+    --bs-btn-hover-border-color: #1679b8;
+    --bs-btn-active-bg: var(--akp-navy);
+    --bs-btn-active-border-color: var(--akp-navy);
+    --bs-btn-disabled-bg: var(--akp-blue);
+    --bs-btn-disabled-border-color: var(--akp-blue);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--akp-blue);
+    --bs-btn-border-color: var(--akp-blue);
+    --bs-btn-hover-bg: var(--akp-blue);
+    --bs-btn-hover-border-color: var(--akp-blue);
+    --bs-btn-active-bg: var(--akp-blue);
+    --bs-btn-active-border-color: var(--akp-blue);
+}
+
+.btn-success {
+    --bs-btn-bg: #2e9e5b;
+    --bs-btn-border-color: #2e9e5b;
+    --bs-btn-hover-bg: #26864c;
+    --bs-btn-hover-border-color: #26864c;
+}
+
+.text-bg-primary, .bg-primary { background-color: var(--akp-blue) !important; }
+.text-primary { color: var(--akp-blue) !important; }
+.form-control:focus, .form-select:focus { border-color: #8cc8ef; box-shadow: 0 0 0 .2rem rgba(26, 143, 216, .2); }
+.form-check-input:checked { background-color: var(--akp-blue); border-color: var(--akp-blue); }
+.nav-tabs .nav-link.active { color: var(--akp-navy); font-weight: 600; }
+.page-link { color: var(--akp-blue); }
+.active > .page-link, .page-link.active { background-color: var(--akp-blue); border-color: var(--akp-blue); }
+
+/* ---------- Sidebar (gelap bawaan AdminLTE, aksen warna merek) ---------- */
+.app-sidebar .brand-link { display: flex; align-items: center; gap: .5rem; text-decoration: none; }
+.app-sidebar .brand-image { max-height: 34px; width: auto; box-shadow: none !important; opacity: 1 !important; }
+.app-sidebar .brand-text { font-weight: 700 !important; color: #fff; letter-spacing: .01em; }
+.app-sidebar .brand-text span { color: #7ccf6f; font-weight: 600; }
+
+/* Halaman yang sedang dibuka: blok biru merek */
+.sidebar-menu .nav-treeview .nav-link.active,
+.sidebar-menu > .nav-item > .nav-link.active:not([href="#"]) {
+    background-color: var(--akp-blue) !important;
+    color: #fff !important;
+}
+
+.sidebar-menu .nav-treeview .nav-link.active .nav-icon { color: #fff; }
+.sidebar-menu .nav-treeview .nav-icon.bi-circle { font-size: .6rem; }
+
+/* ---------- Header ---------- */
+.app-header { border-bottom: 1px solid rgba(0, 0, 0, .06); }
+.app-header .user-role { font-size: .7rem; }
+
+/* ---------- Konten ---------- */
+.app-content { padding-top: 1.25rem; padding-bottom: 1.5rem; }
+.card { border-color: rgba(0, 0, 0, .06); }
+.card > .table-responsive > .dataTables_wrapper { padding: 1rem 1rem .75rem; }
+.dataTables_wrapper .dataTables_info { padding-top: .6rem; color: #6c757d; font-size: .875rem; }
+
+/* ---------- Halaman login / kiosk ---------- */
+.akp-auth-bg {
+    min-height: 100vh;
+    background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(34, 179, 164, .12), transparent 60%),
+        radial-gradient(900px 500px at 110% 110%, rgba(26, 143, 216, .14), transparent 60%),
+        #f4f8fb;
+}
+
+.akp-auth-logo { max-width: 170px; width: 60%; height: auto; }
+.akp-auth-card { border: 0; border-radius: 1rem; box-shadow: 0 10px 30px rgba(27, 58, 107, .10); }
+.akp-brand-bar { background: #fff; border-bottom: 3px solid var(--akp-teal); }
+.akp-brand-bar .navbar-brand { color: var(--akp-navy); font-weight: 700; }
+.akp-brand-bar .navbar-brand img { height: 34px; width: auto; }
+.akp-brand-bar .navbar-brand .sub { color: var(--akp-green); font-weight: 600; }
+
+/* ---------- Dashboard ---------- */
+.akp-section-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--akp-navy);
+    margin: 1.75rem 0 .75rem;
+}
+
+.akp-section-title::after { content: ""; flex: 1; height: 1px; background: rgba(27, 58, 107, .12); }
+.small-box { border-radius: .75rem; }
+.small-box .inner h3 { font-variant-numeric: tabular-nums; }
+.text-bg-akp-navy { background-color: var(--akp-navy) !important; color: #fff !important; }
+.text-bg-akp-teal { background-color: var(--akp-teal) !important; color: #fff !important; }
+.text-bg-akp-green { background-color: var(--akp-green) !important; color: #fff !important; }
+.text-bg-akp-blue { background-color: var(--akp-blue) !important; color: #fff !important; }
+
+/* ---------- Flatpickr: selaras dengan warna merek ---------- */
+.flatpickr-day.selected, .flatpickr-day.selected:hover,
+.flatpickr-day.startRange, .flatpickr-day.endRange { background: var(--akp-blue); border-color: var(--akp-blue); }
+.flatpickr-day.today { border-color: var(--akp-teal); }
+.flatpickr-input[readonly], input.flatpickr-input.form-control { background-color: var(--bs-body-bg); }
+.flatpickr-calendar { font-family: inherit; }

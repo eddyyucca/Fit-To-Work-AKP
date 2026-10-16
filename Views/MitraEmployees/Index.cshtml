@@ -1,0 +1,261 @@
+@model FitToWorkApp.Controllers.Admin.MitraEmployeeIndexViewModel
+@using FitToWorkApp.Security
+@inject FitToWorkApp.Services.IAppClock Clock
+@inject IPermissionService PermissionService
+@{
+    // Tombol "+ Tes" hanya untuk admin yang punya hak Tes Urin & Alkohol
+    var canDrugTest = (await PermissionService.GetAsync(User)).Has(Permissions.MedicalDrugTest);
+    ViewData["Title"] = "Karyawan Mitra";
+    Layout = "_AdminLayout";
+    var today = Clock.Today;
+    var activeMitras = Model.Mitras.Where(m => m.IsActive).ToList();
+    int? Age(DateTime? birth)
+    {
+        if (!birth.HasValue) return null;
+        var age = today.Year - birth.Value.Year;
+        if (birth.Value.Date > today.AddYears(-age)) age--;
+        return age;
+    }
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Karyawan Mitra Kerja</h4>
+        <div class="text-muted small">
+            Karyawan perusahaan mitra yang berkunjung ke klinik. ID = kode mitra + NIP, mis. <strong>GPE-3450</strong>.
+            Karyawan mitra hanya untuk kunjungan klinik (tidak bisa Fit To Work / gym).
+        </div>
+    </div>
+    @if (activeMitras.Count > 0)
+    {
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#meModal" data-mode="create">+ Tambah Karyawan Mitra</button>
+    }
+</div>
+
+@if (Model.Mitras.Count == 0)
+{
+    <div class="alert alert-warning">
+        Belum ada data mitra. Tambahkan dulu perusahaan mitra di menu
+        <a asp-controller="Mitras" asp-action="Index">Master Data › Mitra › Data Mitra</a> (butuh hak akses Master Klinik).
+    </div>
+}
+
+<form method="get" asp-controller="MitraEmployees" asp-action="Index" class="row g-2 align-items-end mb-3">
+    <div class="col-sm-6 col-md-4">
+        <label class="form-label small mb-1" for="filterMitra">Mitra</label>
+        <select class="form-select form-select-sm" id="filterMitra" name="mitraId" onchange="this.form.submit()">
+            <option value="">Semua mitra</option>
+            @foreach (var m in Model.Mitras)
+            {
+                <option value="@m.Id" selected="@(Model.MitraId == m.Id)">@m.Kode - @m.Nama@(m.IsActive ? "" : " (nonaktif)")</option>
+            }
+        </select>
+    </div>
+</form>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" data-order='[]'>
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Nama</th>
+                    <th>Mitra</th>
+                    <th>Jabatan</th>
+                    <th>JK / Umur</th>
+                    <th>No. HP</th>
+                    <th class="text-end">Kunjungan</th>
+                    <th class="text-end">Tes Urin/Alkohol</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Model.Employees)
+                {
+                    var umur = Age(e.TanggalLahir);
+                    <tr class="@(e.IsActive ? "" : "text-muted")">
+                        <td class="text-nowrap fw-semibold">@e.NIP</td>
+                        <td>@e.Nama</td>
+                        <td class="small"><span class="badge bg-dark">@e.MitraKode</span> @e.MitraNama</td>
+                        <td class="small">@e.MitraJabatan</td>
+                        <td class="small text-nowrap">
+                            @(e.JenisKelamin == "L" ? "L" : e.JenisKelamin == "P" ? "P" : "-")
+                            @if (umur.HasValue) { <text>· @umur th</text> }
+                        </td>
+                        <td class="small">@e.NomorHp</td>
+                        <td class="text-end" data-order="@e.JumlahKunjungan">
+                            @if (e.JumlahKunjungan > 0)
+                            {
+                                <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@e.Id">@e.JumlahKunjungan kali</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td class="text-end" data-order="@e.JumlahTes">
+                            @if (e.JumlahTes > 0)
+                            {
+                                <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@e.Id">@e.JumlahTes kali</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>@(e.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            @if (e.IsActive)
+                            {
+                                <a class="btn btn-sm btn-outline-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-employeeId="@e.Id">+ Kunjungan</a>
+                                @if (canDrugTest)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" asp-controller="DrugTests" asp-action="Create" asp-route-employeeId="@e.Id">+ Tes</a>
+                                }
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#meModal"
+                                    data-mode="edit" data-id="@e.Id" data-mitra="@e.MitraId" data-nip="@e.MitraNip" data-nama="@e.Nama"
+                                    data-jabatan="@e.MitraJabatan" data-jk="@e.JenisKelamin" data-lahir="@(e.TanggalLahir?.ToString("yyyy-MM-dd"))"
+                                    data-hp="@e.NomorHp" data-active="@(e.IsActive ? "true" : "false")">Ubah</button>
+                            <form asp-controller="MitraEmployees" asp-action="ToggleActive" asp-route-id="@e.Id" method="post" class="d-inline">
+                                <input type="hidden" name="activate" value="@(e.IsActive ? "false" : "true")" />
+                                <input type="hidden" name="returnMitraId" value="@Model.MitraId" />
+                                <button type="submit" class="btn btn-sm @(e.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(e.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                            @if (e.JumlahKunjungan == 0 && e.JumlahTes == 0)
+                            {
+                                <form asp-controller="MitraEmployees" asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline"
+                                      data-confirm="Hapus karyawan mitra @e.NIP - @e.Nama?">
+                                    <input type="hidden" name="returnMitraId" value="@Model.MitraId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        Karyawan mitra yang sudah punya riwayat kunjungan atau tes urin/alkohol tidak bisa dihapus, cukup dinonaktifkan (tidak muncul lagi saat input kunjungan / tes).
+    </div>
+</div>
+
+<div class="modal fade" id="meModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form class="modal-content" asp-controller="MitraEmployees" asp-action="Save" method="post" autocomplete="off">
+            <div class="modal-header">
+                <h5 class="modal-title" id="meModalTitle">Tambah Karyawan Mitra</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Id" id="meId" value="0" />
+                <input type="hidden" name="returnMitraId" value="@Model.MitraId" />
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="meMitra">Mitra</label>
+                        <select class="form-select" name="MitraId" id="meMitra" required>
+                            <option value="">- pilih mitra -</option>
+                            @foreach (var m in Model.Mitras)
+                            {
+                                <option value="@m.Id" data-kode="@m.Kode" data-active="@(m.IsActive ? "true" : "false")"
+                                        disabled="@(!m.IsActive)">@m.Kode - @m.Nama@(m.IsActive ? "" : " (nonaktif)")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label" for="meNip">NIP di mitra</label>
+                        <input class="form-control text-uppercase" name="MitraNip" id="meNip" maxlength="16" required placeholder="3450" />
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">ID karyawan</label>
+                        <div class="form-control bg-light fw-bold" id="meFullId">-</div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-7 mb-3">
+                        <label class="form-label" for="meNama">Nama lengkap</label>
+                        <input class="form-control" name="Nama" id="meNama" maxlength="150" required />
+                    </div>
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label" for="meJabatan">Jabatan / bagian <span class="text-muted small">(opsional)</span></label>
+                        <input class="form-control" name="MitraJabatan" id="meJabatan" maxlength="100" placeholder="mis. Operator DT" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label" for="meJk">Jenis kelamin</label>
+                        <select class="form-select" name="JenisKelamin" id="meJk">
+                            <option value="">-</option>
+                            <option value="L">Laki-laki</option>
+                            <option value="P">Perempuan</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label" for="meLahir">Tanggal lahir</label>
+                        <input class="form-control" name="TanggalLahir" id="meLahir" type="date" data-max-today="true" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label" for="meHp">No. HP</label>
+                        <input class="form-control" name="NomorHp" id="meHp" maxlength="20" inputmode="tel" />
+                    </div>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" name="IsActive" id="meActive" value="true" checked />
+                    <input type="hidden" name="IsActive" value="false" />
+                    <label class="form-check-label" for="meActive">Aktif (bisa dipilih saat input kunjungan klinik)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const $ = (id) => document.getElementById(id);
+            const setDate = window.akpSetDate || ((el, v) => { el.value = v || ''; });
+            const mitra = $('meMitra'), nip = $('meNip'), fullId = $('meFullId');
+            const defaultMitra = @Json.Serialize(Model.MitraId);
+
+            // Pratinjau ID: KODE-NIP, mis. GPE-3450
+            const refreshId = () => {
+                const opt = mitra.selectedOptions[0];
+                const kode = opt && opt.dataset.kode ? opt.dataset.kode : '';
+                const n = nip.value.trim().toUpperCase();
+                fullId.textContent = kode && n ? `${kode}-${n}` : '-';
+            };
+            mitra.addEventListener('change', refreshId);
+            nip.addEventListener('input', refreshId);
+
+            $('meModal').addEventListener('show.bs.modal', (e) => {
+                const b = e.relatedTarget.dataset;
+                const isEdit = b.mode === 'edit';
+                $('meModalTitle').textContent = isEdit ? 'Ubah Karyawan Mitra' : 'Tambah Karyawan Mitra';
+                $('meId').value = isEdit ? b.id : 0;
+
+                // Mitra nonaktif tetap bisa dipilih untuk karyawan lamanya (supaya bisa diedit)
+                [...mitra.options].forEach((o) => {
+                    if (o.value) o.disabled = o.dataset.active !== 'true' && !(isEdit && o.value === b.mitra);
+                });
+                const pre = isEdit ? b.mitra : (defaultMitra ? String(defaultMitra) : '');
+                const preOpt = [...mitra.options].find((o) => o.value === pre && !o.disabled);
+                mitra.value = preOpt ? pre : '';
+
+                nip.value = isEdit ? (b.nip || '') : '';
+                $('meNama').value = isEdit ? (b.nama || '') : '';
+                $('meJabatan').value = isEdit ? (b.jabatan || '') : '';
+                $('meJk').value = isEdit ? (b.jk || '') : '';
+                setDate($('meLahir'), isEdit ? (b.lahir || '') : '');
+                $('meHp').value = isEdit ? (b.hp || '') : '';
+                $('meActive').checked = isEdit ? b.active === 'true' : true;
+                refreshId();
+            });
+        })();
+    </script>
+}

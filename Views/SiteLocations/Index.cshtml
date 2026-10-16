@@ -1,0 +1,110 @@
+@model List<SiteLocation>
+@{
+    ViewData["Title"] = "Lokasi Site";
+    Layout = "_AdminLayout";
+    var aktif = Model.Count(x => x.IsActive);
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var mapData = Model.Select(s => new { id = s.Id, nama = s.Nama, lat = s.Latitude, lng = s.Longitude, radius = s.RadiusMeter, aktif = s.IsActive });
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #siteMap { height: 380px; border-radius: .5rem; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Lokasi Site</h4>
+        <div class="text-muted small">
+            Karyawan hanya bisa mengisi <strong>Fit To Work</strong> dan <strong>check-in/check-out Gym</strong>
+            kalau HP-nya berada di dalam radius salah satu lokasi aktif, atau terhubung ke Wi-Fi site.
+        </div>
+    </div>
+    <a asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Tambah Lokasi</a>
+</div>
+
+@if (aktif == 0)
+{
+    <div class="alert alert-warning">
+        <strong>Kunci lokasi belum aktif.</strong> Belum ada lokasi site yang aktif, jadi karyawan masih bisa mengisi dari mana saja.
+        Tambahkan minimal satu lokasi untuk mengaktifkan kunci lokasi.
+    </div>
+}
+else
+{
+    <div class="alert alert-success py-2 small mb-3">
+        <i class="bi bi-shield-lock me-1"></i>Kunci lokasi <strong>aktif</strong> di @aktif lokasi.
+        Perubahan langsung berlaku untuk karyawan.
+    </div>
+}
+
+@if (Model.Count > 0)
+{
+    <div class="card shadow-sm mb-3">
+        <div class="card-body p-2"><div id="siteMap" aria-label="Peta lokasi site"></div></div>
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Nama Lokasi</th>
+                    <th>Titik (lat, long)</th>
+                    <th class="text-end">Radius</th>
+                    <th>IP Wi-Fi Site</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model)
+                {
+                    var coord = $"{s.Latitude.ToString("0.000000", inv)}, {s.Longitude.ToString("0.000000", inv)}";
+                    <tr class="@(s.IsActive ? "" : "text-muted")">
+                        <td>
+                            <div class="fw-semibold">@s.Nama</div>
+                            @if (!string.IsNullOrWhiteSpace(s.Keterangan))
+                            {
+                                <div class="small text-muted">@s.Keterangan</div>
+                            }
+                        </td>
+                        <td class="small text-nowrap">
+                            <a href="https://www.google.com/maps?q=@coord.Replace(" ", "")" target="_blank" rel="noopener" title="Buka di Google Maps">@coord</a>
+                        </td>
+                        <td class="text-end text-nowrap">@FitToWorkApp.Services.SiteGeofence.FormatDistance(s.RadiusMeter)</td>
+                        <td class="small">@(s.IpList.Count == 0 ? "-" : string.Join(", ", s.IpList))</td>
+                        <td>@(s.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-secondary">Ubah</a>
+                            <form asp-action="ToggleActive" asp-route-id="@s.Id" method="post" class="d-inline"
+                                  data-confirm="@(s.IsActive && aktif == 1 ? $"Nonaktifkan {s.Nama}? Ini lokasi aktif terakhir, jadi kunci lokasi akan MATI dan karyawan bisa mengisi dari mana saja." : $"{(s.IsActive ? "Nonaktifkan" : "Aktifkan")} lokasi {s.Nama}?")">
+                                <input type="hidden" name="activate" value="@(s.IsActive ? "false" : "true")" />
+                                <button type="submit" class="btn btn-sm @(s.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(s.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                            <form asp-action="Delete" asp-route-id="@s.Id" method="post" class="d-inline"
+                                  data-confirm="Hapus lokasi @s.Nama? Riwayat pengisian lama tetap menyimpan nama lokasinya." data-confirm-ok="Ya, Hapus">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">Belum ada lokasi site.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        <strong>IP Wi-Fi site</strong> (opsional): IP publik internet site. HP yang tersambung ke Wi-Fi tersebut dianggap di site walau sinyal GPS lemah.
+        IP publik komputer Anda saat ini: <code>@(ViewBag.MyIp ?? "-")</code> (kalau Anda sedang di Wi-Fi site, IP inilah yang diisikan).
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>window.AKP_SITES = { mode: 'overview', sites: @Json.Serialize(mapData) };</script>
+    <script src="~/js/site-locations.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,215 @@
+@model FitToWorkFormViewModel
+@{
+    ViewData["Title"] = "Isi Fit To Work";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-3 p-md-4 form-card-body">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <h4 class="mb-1">Fit To Work</h4>
+                    <a asp-controller="Menu" asp-action="Index" class="btn btn-sm btn-outline-secondary">‹ Menu</a>
+                </div>
+                <p class="text-muted small">WAJIB diisi sebelum memulai aktivitas kerja untuk memastikan keselamatan dan kesehatan bersama.</p>
+
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <form asp-controller="Form" asp-action="Index" method="post" data-location-guard>
+                    <input type="hidden" asp-for="EmployeeId" />
+                    <partial name="_LocationStatus" model="(LocationUiModel)ViewBag.Location" />
+
+                    <h6 class="form-section-title">Data Diri</h6>
+                    <div class="row g-2">
+                        <div class="col-12 col-md-6 mb-2">
+                            <label class="form-label small text-muted mb-1">Nama Karyawan</label>
+                            <input class="form-control readonly-field" value="@Model.Nama" readonly />
+                        </div>
+                        <div class="col-12 col-md-6 mb-2">
+                            <label class="form-label small text-muted mb-1">Section</label>
+                            <input class="form-control readonly-field" value="@Model.Section" readonly />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NomorHp" class="form-label small text-muted mb-1"></label>
+                        <input asp-for="NomorHp" class="form-control" inputmode="tel" placeholder="Contoh: 081234567890" />
+                        <span asp-validation-for="NomorHp" class="text-danger small"></span>
+                    </div>
+
+                    <h6 class="form-section-title">Jadwal &amp; Area Kerja</h6>
+                    <div class="mb-4">
+                        <label asp-for="JadwalKerja" class="form-label small text-muted mb-2 d-block"></label>
+                        <div class="choice-group choice-inline">
+                            @foreach (var opt in ((List<string>)ViewBag.JadwalKerjaOptions ?? new List<string>()))
+                            {
+                                <label class="choice-btn">
+                                    <input type="radio" name="JadwalKerja" value="@opt" checked="@(Model.JadwalKerja == opt)" />
+                                    <span class="choice-label">@opt</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="JadwalKerja" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-2">
+                        <label asp-for="AreaKerja" class="form-label small text-muted mb-2 d-block"></label>
+                        <div class="choice-group choice-inline">
+                            @foreach (var opt in ((List<string>)ViewBag.AreaKerjaOptions ?? new List<string>()))
+                            {
+                                <label class="choice-btn area-kerja-radio">
+                                    <input type="radio" name="AreaKerja" value="@opt" checked="@(Model.AreaKerja == opt)" />
+                                    <span class="choice-label">@opt</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="AreaKerja" class="text-danger small"></span>
+                        <input asp-for="AreaKerjaLainnya" class="form-control mt-2" id="areaKerjaLainnyaInput" placeholder="Sebutkan area kerja lainnya" style="display:none;" />
+                    </div>
+
+                    <h6 class="form-section-title">Kondisi Istirahat</h6>
+                    <div class="mb-4">
+                        <label asp-for="JamTidur" class="form-label small text-muted mb-1"></label>
+                        <select asp-for="JamTidur" class="form-select">
+                            <option value="">-- Pilih --</option>
+                            @foreach (var opt in ((List<string>)ViewBag.JamTidurOptions ?? new List<string>()))
+                            {
+                                <option value="@opt" selected="@(Model.JamTidur == opt)">@opt</option>
+                            }
+                        </select>
+                        <span asp-validation-for="JamTidur" class="text-danger small"></span>
+                    </div>
+
+                    <h6 class="form-section-title">Kesiapan Bekerja</h6>
+                    <label asp-for="KesiapanKerja" class="form-label small text-muted mb-2 d-block"></label>
+                    <div class="mb-3">
+                        <div class="choice-group">
+                            @foreach (var opt in ((List<string>)ViewBag.KesiapanKerjaOptions ?? new List<string>()))
+                            {
+                                <label class="choice-btn">
+                                    <input type="radio" class="kesiapan-radio" name="KesiapanKerja" value="@opt" checked="@(Model.KesiapanKerja == opt)" />
+                                    <span class="choice-label">@opt</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="KesiapanKerja" class="text-danger small"></span>
+                    </div>
+
+                    <!-- Detail kondisi: hanya muncul (dan wajib diisi) kalau memilih TIDAK FIT -->
+                    <div id="detailTidakFit" style="display:none;">
+                        <div class="alert alert-warning small">
+                            Jika Anda merasa <strong>TIDAK FIT</strong> atau memilih <strong>'Sangat Terganggu'</strong>, Anda <strong>WAJIB</strong>:
+                            lapor ke pengawas/foreman, kunjungi klinik site untuk observasi, dan jangan mengoperasikan unit/kendaraan sebelum ada instruksi lebih lanjut.
+                        </div>
+                        <h6 class="form-section-title">Kualitas Istirahat</h6>
+                        <div class="mb-4">
+                            <label asp-for="KualitasTidur" class="form-label small text-muted mb-2 d-block"></label>
+                            <div class="choice-group">
+                                @foreach (var opt in ((List<string>)ViewBag.KualitasTidurOptions ?? new List<string>()))
+                                {
+                                    <label class="choice-btn">
+                                        <input type="radio" name="KualitasTidur" value="@opt" checked="@(Model.KualitasTidur == opt)" />
+                                        <span class="choice-label">@opt</span>
+                                    </label>
+                                }
+                            </div>
+                            <span asp-validation-for="KualitasTidur" class="text-danger small"></span>
+                        </div>
+
+                        <h6 class="form-section-title">Kondisi Kesehatan Hari Ini</h6>
+                        <div class="mb-4">
+                            <label class="form-label small text-muted mb-2 d-block">Apakah Anda merasakan gejala kesehatan berikut hari ini?</label>
+                            <div class="choice-group">
+                                @foreach (var opt in ((List<string>)ViewBag.GejalaOptions ?? new List<string>()))
+                                {
+                                    <label class="choice-btn">
+                                        <input type="checkbox" class="gejala-checkbox" name="GejalaKesehatan" value="@opt" checked="@(Model.GejalaKesehatan.Contains(opt))" />
+                                        <span class="choice-label">@opt</span>
+                                    </label>
+                                }
+                            </div>
+                            <span asp-validation-for="GejalaKesehatan" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="KondisiFokus" class="form-label small text-muted mb-1 d-block"></label>
+                            <p class="text-muted small mb-2">Jika Anda merasa sangat terganggu/sulit fokus, sangat disarankan untuk berkonsultasi dengan pengawas/medik.</p>
+                            <div class="choice-group">
+                                @foreach (var opt in ((List<string>)ViewBag.KondisiFokusOptions ?? new List<string>()))
+                                {
+                                    <label class="choice-btn">
+                                        <input type="radio" name="KondisiFokus" value="@opt" checked="@(Model.KondisiFokus == opt)" />
+                                        <span class="choice-label">@opt</span>
+                                    </label>
+                                }
+                            </div>
+                            <span asp-validation-for="KondisiFokus" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-2">
+                            <label asp-for="KonsumsiObat" class="form-label small text-muted mb-1 d-block"></label>
+                            <p class="text-muted small mb-2">Obat flu, batuk, atau obat lain yang bisa menyebabkan kantuk dalam 12 jam terakhir.</p>
+                            <div class="choice-group choice-inline">
+                                <label class="choice-btn">
+                                    <input type="radio" name="KonsumsiObat" value="YA" checked="@(Model.KonsumsiObat == "YA")" />
+                                    <span class="choice-label">YA</span>
+                                </label>
+                                <label class="choice-btn">
+                                    <input type="radio" name="KonsumsiObat" value="TIDAK" checked="@(Model.KonsumsiObat == "TIDAK")" />
+                                    <span class="choice-label">TIDAK</span>
+                                </label>
+                            </div>
+                            <span asp-validation-for="KonsumsiObat" class="text-danger small"></span>
+                        </div>
+
+                    </div>
+
+                    <div class="mobile-sticky-submit">
+                        <button type="submit" class="btn btn-primary btn-lg w-100">Kirim</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/location-guard.js" asp-append-version="true"></script>
+    <script>
+        // Tampilkan input "Area kerja lainnya" hanya saat pilih "Other"
+        function toggleAreaLainnya() {
+            var checked = document.querySelector('input[name="AreaKerja"]:checked');
+            var box = document.getElementById('areaKerjaLainnyaInput');
+            box.style.display = (checked && checked.value === 'Other') ? 'block' : 'none';
+        }
+        document.querySelectorAll('.area-kerja-radio input').forEach(function (el) {
+            el.addEventListener('change', toggleAreaLainnya);
+        });
+        toggleAreaLainnya();
+
+        // Pilihan "TIDAK FIT" (bukan diawali "YA") -> tampilkan & wajibkan detail kondisi
+        function toggleDetailTidakFit() {
+            var checked = document.querySelector('input[name="KesiapanKerja"]:checked');
+            var tidakFit = !!checked && !checked.value.toUpperCase().startsWith('YA');
+            document.getElementById('detailTidakFit').style.display = tidakFit ? 'block' : 'none';
+        }
+        document.querySelectorAll('.kesiapan-radio').forEach(function (el) {
+            el.addEventListener('change', toggleDetailTidakFit);
+        });
+        toggleDetailTidakFit();
+
+        // "TIDAK ADA GEJALA" bersifat eksklusif terhadap gejala lain
+        var gejalaBoxes = document.querySelectorAll('.gejala-checkbox');
+        gejalaBoxes.forEach(function (box) {
+            box.addEventListener('change', function () {
+                if (box.value === 'TIDAK ADA GEJALA' && box.checked) {
+                    gejalaBoxes.forEach(function (b) { if (b !== box) b.checked = false; });
+                } else if (box.checked) {
+                    gejalaBoxes.forEach(function (b) {
+                        if (b.value === 'TIDAK ADA GEJALA') b.checked = false;
+                    });
+                }
+            });
+        });
+    </script>
+}

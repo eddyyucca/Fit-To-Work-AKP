@@ -1,0 +1,570 @@
+@using FitToWorkApp.Models
+@{
+    ViewData["Title"] = "Data Organisasi";
+    Layout = "_AdminLayout";
+    string activeTab = ViewBag.ActiveTab;
+    var divisions = (List<Division>)ViewBag.Divisions;
+    var departments = (List<Department>)ViewBag.Departments;
+    var sections = (List<Section>)ViewBag.Sections;
+    var positions = (List<Position>)ViewBag.Positions;
+    var departmentOptions = (List<Department>)ViewBag.DepartmentOptions;
+}
+
+<h4 class="mb-1">Data Organisasi</h4>
+<p class="text-muted small mb-4">
+    Kelola struktur Division, Department, Section, dan Position/Jabatan yang dipakai saat menambahkan data karyawan.
+</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(activeTab == "division" ? "active fw-bold" : "")" asp-action="Index"
+           asp-route-tab="division">🏬 Division</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(activeTab == "department" ? "active fw-bold" : "")" asp-action="Index"
+           asp-route-tab="department">🏢 Department</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(activeTab == "section" ? "active fw-bold" : "")" asp-action="Index"
+           asp-route-tab="section">🗂️ Section</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(activeTab == "position" ? "active fw-bold" : "")" asp-action="Index"
+           asp-route-tab="position">🪪 Position</a>
+    </li>
+</ul>
+
+@if (activeTab == "division")
+{
+    <div class="d-flex justify-content-end mb-3">
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addDivisionModal">+
+            Tambah Division</button>
+        </div>
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table mb-0 align-middle datatable" id="divisionsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:80px;">Urutan</th>
+                            <th>Nama Division</th>
+                            <th style="width:100px;">Status</th>
+                            <th class="text-end" style="width:220px;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var dv in divisions)
+                        {
+                            <tr>
+                                <td>@dv.SortOrder</td>
+                                <td>@dv.Name</td>
+                                <td>
+                                    @if (dv.IsActive)
+                                    {
+                                        <span class="badge bg-success">Aktif</span>
+                                    }
+                                    else
+                                    {
+
+                                        <span class="badge bg-secondary">Nonaktif</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                            data-bs-target="#editDivisionModal-@dv.Id">Edit</button>
+                                    <form asp-action="ToggleDivisionActive" asp-route-id="@dv.Id" method="post" class="d-inline">
+                                        <input type="hidden" name="activate" value="@(!dv.IsActive)" />
+                                        <button type="submit"
+                                                class="btn btn-sm @(dv.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(dv.IsActive
+                                                ? "Nonaktifkan" : "Aktifkan")</button>
+                                        </form>
+                                        <form asp-action="DeleteDivision" asp-route-id="@dv.Id" method="post" class="d-inline"
+                                              data-confirm="Hapus division ini?" data-confirm-ok="Ya, Hapus">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modal: Tambah Division -->
+            <div class="modal fade" id="addDivisionModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form asp-action="CreateDivision" method="post">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Tambah Division</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Nama Division</label>
+                                    <input type="text" name="Name" class="form-control" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Urutan Tampil</label>
+                                    <input type="number" name="SortOrder" class="form-control" style="max-width:150px;" value="0" />
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" name="IsActive" class="form-check-input" value="true" checked
+                                           id="addDivisionActive" />
+                                    <input type="hidden" name="IsActive" value="false" />
+                                    <label class="form-check-label" for="addDivisionActive">Aktif</label>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-primary">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Edit Division (satu per baris) -->
+            @foreach (var dv in divisions)
+            {
+                <div class="modal fade" id="editDivisionModal-@dv.Id" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form asp-action="EditDivision" asp-route-id="@dv.Id" method="post">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Edit Division</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nama Division</label>
+                                        <input type="text" name="Name" class="form-control" value="@dv.Name" required />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Urutan Tampil</label>
+                                        <input type="number" name="SortOrder" class="form-control" style="max-width:150px;"
+                                               value="@dv.SortOrder" />
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="checkbox" name="IsActive" class="form-check-input" value="true"
+                                               checked="@dv.IsActive" id="editDivisionActive-@dv.Id" />
+                                        <input type="hidden" name="IsActive" value="false" />
+                                        <label class="form-check-label" for="editDivisionActive-@dv.Id">Aktif</label>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                    <button type="submit" class="btn btn-primary">Simpan</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+else if (activeTab == "department")
+        {
+            <div class="d-flex justify-content-end mb-3">
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addDepartmentModal">+
+                    Tambah Department</button>
+                </div>
+                <div class="card shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table mb-0 align-middle datatable" id="departmentsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:80px;">Urutan</th>
+                                    <th>Nama Department</th>
+                                    <th style="width:100px;">Status</th>
+                                    <th class="text-end" style="width:220px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var d in departments)
+                                {
+                                    <tr>
+                                        <td>@d.SortOrder</td>
+                                        <td>@d.Name</td>
+                                        <td>
+                                            @if (d.IsActive)
+                                            {
+                                                <span class="badge bg-success">Aktif</span>
+                                            }
+                                            else
+                                            {
+
+                                                <span class="badge bg-secondary">Nonaktif</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                                    data-bs-target="#editDepartmentModal-@d.Id">Edit</button>
+                                            <form asp-action="ToggleDepartmentActive" asp-route-id="@d.Id" method="post" class="d-inline">
+                                                <input type="hidden" name="activate" value="@(!d.IsActive)" />
+                                                <button type="submit"
+                                                        class="btn btn-sm @(d.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(d.IsActive
+                                                        ? "Nonaktifkan" : "Aktifkan")</button>
+                                                </form>
+                                                <form asp-action="DeleteDepartment" asp-route-id="@d.Id" method="post" class="d-inline"
+                                                      data-confirm="Hapus department ini?" data-confirm-ok="Ya, Hapus">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Modal: Tambah Department -->
+                    <div class="modal fade" id="addDepartmentModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <form asp-action="CreateDepartment" method="post">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Tambah Department</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nama Department</label>
+                                            <input type="text" name="Name" class="form-control" required />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Urutan Tampil</label>
+                                            <input type="number" name="SortOrder" class="form-control" style="max-width:150px;" value="0" />
+                                        </div>
+                                        <div class="form-check">
+                                            <input type="checkbox" name="IsActive" class="form-check-input" value="true" checked
+                                                   id="addDeptActive" />
+                                            <input type="hidden" name="IsActive" value="false" />
+                                            <label class="form-check-label" for="addDeptActive">Aktif</label>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                        <button type="submit" class="btn btn-primary">Simpan</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal: Edit Department (satu per baris) -->
+                    @foreach (var d in departments)
+                    {
+                        <div class="modal fade" id="editDepartmentModal-@d.Id" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form asp-action="EditDepartment" asp-route-id="@d.Id" method="post">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Edit Department</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Nama Department</label>
+                                                <input type="text" name="Name" class="form-control" value="@d.Name" required />
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Urutan Tampil</label>
+                                                <input type="number" name="SortOrder" class="form-control" style="max-width:150px;"
+                                                       value="@d.SortOrder" />
+                                            </div>
+                                            <div class="form-check">
+                                                <input type="checkbox" name="IsActive" class="form-check-input" value="true"
+                                                       checked="@d.IsActive" id="editDeptActive-@d.Id" />
+                                                <input type="hidden" name="IsActive" value="false" />
+                                                <label class="form-check-label" for="editDeptActive-@d.Id">Aktif</label>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                            <button type="submit" class="btn btn-primary">Simpan</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+else if (activeTab == "section")
+                {
+                    <div class="d-flex justify-content-end mb-3">
+                        @if (departmentOptions.Count == 0)
+                        {
+                            <span class="text-danger small align-self-center me-2">Tambahkan Department aktif dulu sebelum bisa menambah
+                                Section.</span>
+                            }
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSectionModal"
+                                    disabled="@(departmentOptions.Count == 0)">+ Tambah Section</button>
+                        </div>
+                        <div class="card shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table mb-0 align-middle datatable" id="sectionsTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:80px;">Urutan</th>
+                                            <th>Nama Section</th>
+                                            <th>Department</th>
+                                            <th style="width:100px;">Status</th>
+                                            <th class="text-end" style="width:220px;">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var s in sections)
+                                        {
+                                            <tr>
+                                                <td>@s.SortOrder</td>
+                                                <td>@s.Name</td>
+                                                <td>@s.DepartmentName</td>
+                                                <td>
+                                                    @if (s.IsActive)
+                                                    {
+                                                        <span class="badge bg-success">Aktif</span>
+                                                    }
+                                                    else
+                                                    {
+
+                                                        <span class="badge bg-secondary">Nonaktif</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                                            data-bs-target="#editSectionModal-@s.Id">Edit</button>
+                                                    <form asp-action="ToggleSectionActive" asp-route-id="@s.Id" method="post" class="d-inline">
+                                                        <input type="hidden" name="activate" value="@(!s.IsActive)" />
+                                                        <button type="submit"
+                                                                class="btn btn-sm @(s.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(s.IsActive
+                                                                ? "Nonaktifkan" : "Aktifkan")</button>
+                                                        </form>
+                                                        <form asp-action="DeleteSection" asp-route-id="@s.Id" method="post" class="d-inline"
+                                                              data-confirm="Hapus section ini?" data-confirm-ok="Ya, Hapus">
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Modal: Tambah Section -->
+                            <div class="modal fade" id="addSectionModal" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form asp-action="CreateSection" method="post">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Tambah Section</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Department</label>
+                                                    <select name="DepartmentId" class="form-select" required>
+                                                        <option value="">-- Pilih Department --</option>
+                                                        @foreach (var d in departmentOptions)
+                                                        {
+                                                            <option value="@d.Id">@d.Name</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Nama Section</label>
+                                                    <input type="text" name="Name" class="form-control" required />
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Urutan Tampil</label>
+                                                    <input type="number" name="SortOrder" class="form-control" style="max-width:150px;" value="0" />
+                                                </div>
+                                                <div class="form-check">
+                                                    <input type="checkbox" name="IsActive" class="form-check-input" value="true" checked
+                                                           id="addSectionActive" />
+                                                    <input type="hidden" name="IsActive" value="false" />
+                                                    <label class="form-check-label" for="addSectionActive">Aktif</label>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                                <button type="submit" class="btn btn-primary">Simpan</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal: Edit Section (satu per baris) -->
+                            @foreach (var s in sections)
+                            {
+                                <div class="modal fade" id="editSectionModal-@s.Id" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form asp-action="EditSection" asp-route-id="@s.Id" method="post">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Edit Section</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Department</label>
+                                                        <select name="DepartmentId" class="form-select" required>
+                                                            @foreach (var d in departmentOptions)
+                                                            {
+                                                                <option value="@d.Id" selected="@(s.DepartmentId == d.Id)">@d.Name</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Nama Section</label>
+                                                        <input type="text" name="Name" class="form-control" value="@s.Name" required />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Urutan Tampil</label>
+                                                        <input type="number" name="SortOrder" class="form-control" style="max-width:150px;"
+                                                               value="@s.SortOrder" />
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input type="checkbox" name="IsActive" class="form-check-input" value="true"
+                                                               checked="@s.IsActive" id="editSectionActive-@s.Id" />
+                                                        <input type="hidden" name="IsActive" value="false" />
+                                                        <label class="form-check-label" for="editSectionActive-@s.Id">Aktif</label>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                                    <button type="submit" class="btn btn-primary">Simpan</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+else if (activeTab == "position")
+                        {
+                            <div class="d-flex justify-content-end mb-3">
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPositionModal">+
+                                    Tambah Position</button>
+                                </div>
+                                <div class="card shadow-sm">
+                                    <div class="table-responsive">
+                                        <table class="table mb-0 align-middle datatable" id="positionsTable">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width:80px;">Urutan</th>
+                                                    <th>Nama Position</th>
+                                                    <th style="width:100px;">Status</th>
+                                                    <th class="text-end" style="width:220px;">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var p in positions)
+                                                {
+                                                    <tr>
+                                                        <td>@p.SortOrder</td>
+                                                        <td>@p.Name</td>
+                                                        <td>
+                                                            @if (p.IsActive)
+                                                            {
+                                                                <span class="badge bg-success">Aktif</span>
+                                                            }
+                                                            else
+                                                            {
+
+                                                                <span class="badge bg-secondary">Nonaktif</span>
+                                                            }
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                                                    data-bs-target="#editPositionModal-@p.Id">Edit</button>
+                                                            <form asp-action="TogglePositionActive" asp-route-id="@p.Id" method="post" class="d-inline">
+                                                                <input type="hidden" name="activate" value="@(!p.IsActive)" />
+                                                                <button type="submit"
+                                                                        class="btn btn-sm @(p.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(p.IsActive
+                                                                        ? "Nonaktifkan" : "Aktifkan")</button>
+                                                                </form>
+                                                                <form asp-action="DeletePosition" asp-route-id="@p.Id" method="post" class="d-inline"
+                                                                      data-confirm="Hapus position ini?" data-confirm-ok="Ya, Hapus">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                                                </form>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- Modal: Tambah Position -->
+                                    <div class="modal fade" id="addPositionModal" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <form asp-action="CreatePosition" method="post">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Tambah Position</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Nama Position / Jabatan</label>
+                                                            <input type="text" name="Name" class="form-control" required />
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Urutan Tampil</label>
+                                                            <input type="number" name="SortOrder" class="form-control" style="max-width:150px;" value="0" />
+                                                        </div>
+                                                        <div class="form-check">
+                                                            <input type="checkbox" name="IsActive" class="form-check-input" value="true" checked
+                                                                   id="addPositionActive" />
+                                                            <input type="hidden" name="IsActive" value="false" />
+                                                            <label class="form-check-label" for="addPositionActive">Aktif</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                                        <button type="submit" class="btn btn-primary">Simpan</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Modal: Edit Position (satu per baris) -->
+                                    @foreach (var p in positions)
+                                    {
+                                        <div class="modal fade" id="editPositionModal-@p.Id" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <form asp-action="EditPosition" asp-route-id="@p.Id" method="post">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">Edit Position</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Nama Position / Jabatan</label>
+                                                                <input type="text" name="Name" class="form-control" value="@p.Name" required />
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Urutan Tampil</label>
+                                                                <input type="number" name="SortOrder" class="form-control" style="max-width:150px;"
+                                                                       value="@p.SortOrder" />
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input type="checkbox" name="IsActive" class="form-check-input" value="true"
+                                                                       checked="@p.IsActive" id="editPositionActive-@p.Id" />
+                                                                <input type="hidden" name="IsActive" value="false" />
+                                                                <label class="form-check-label" for="editPositionActive-@p.Id">Aktif</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                                            <button type="submit" class="btn btn-primary">Simpan</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }

@@ -1,0 +1,71 @@
+@model FitToWorkApp.Services.HrisSyncResult?
+@{
+    ViewData["Title"] = "Sinkron Karyawan dari HRIS";
+    Layout = "_AdminLayout";
+    var configured = ViewBag.IsConfigured == true;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Sinkron Karyawan dari HRIS</h4>
+    <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Kembali</a>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-4">
+        <div asp-validation-summary="All" class="text-danger"></div>
+
+        @if (!configured)
+        {
+            <div class="alert alert-warning">
+                HRIS belum dikonfigurasi. Isi <strong>HRIS_API_URL</strong> dan <strong>HRIS_API_TOKEN</strong> di environment aplikasi
+                (token sama dengan <code>HRIS_API_TOKEN</code> di HRIS), lalu jalankan ulang aplikasi.
+            </div>
+        }
+
+        <ul class="small text-muted mb-4">
+            <li>Data diambil dari HRIS lewat REST API (baca-saja). HRIS adalah sumber kebenaran.</li>
+            <li>NIP FitToWork = nomor karyawan HRIS. Karyawan baru ditambahkan, yang sudah ada diperbarui
+                (nama, no HP, division, department, jabatan, tanggal lahir, jenis kelamin, status aktif).</li>
+            <li>Karyawan baru yang sudah tidak aktif di HRIS dilewati. Karyawan mitra dan karyawan yang tidak ada di HRIS tidak diubah.</li>
+            <li>Division / Department / Jabatan yang belum ada di Data Organisasi dibuat otomatis. Section tidak diubah.</li>
+            <li>Jalankan <strong>Dry-run</strong> dulu untuk melihat hasilnya tanpa menyimpan apa pun.</li>
+        </ul>
+
+        <form method="post" asp-controller="Employees" asp-action="HrisSync" class="d-flex flex-wrap gap-2">
+            <button type="submit" name="dryRun" value="true" class="btn btn-outline-primary" disabled="@(!configured)">Dry-run (tidak menyimpan)</button>
+            <button type="submit" name="dryRun" value="false" class="btn btn-primary" disabled="@(!configured)"
+                    onclick="return confirm('Sinkronkan data karyawan dari HRIS sekarang? Perubahan akan disimpan.');">Sinkron Sekarang</button>
+        </form>
+    </div>
+</div>
+
+@if (Model is not null)
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <h5 class="mb-3">
+                Hasil @(Model.DryRun ? "Dry-run (belum disimpan)" : "Sinkronisasi (sudah disimpan)")
+            </h5>
+            <div class="row g-3 mb-3 text-center">
+                <div class="col-6 col-md-2"><div class="fw-bold fs-4">@Model.FromHris</div><div class="small text-muted">Dari HRIS</div></div>
+                <div class="col-6 col-md-2"><div class="fw-bold fs-4 text-success">@Model.Created</div><div class="small text-muted">Ditambahkan</div></div>
+                <div class="col-6 col-md-2"><div class="fw-bold fs-4 text-primary">@Model.Updated</div><div class="small text-muted">Diperbarui</div></div>
+                <div class="col-6 col-md-2"><div class="fw-bold fs-4">@Model.Unchanged</div><div class="small text-muted">Tidak berubah</div></div>
+                <div class="col-6 col-md-2"><div class="fw-bold fs-4 text-secondary">@Model.Skipped</div><div class="small text-muted">Dilewati</div></div>
+            </div>
+            @if (Model.Notes.Count > 0)
+            {
+                <ul class="small mb-0">
+                    @foreach (var note in Model.Notes.Take(100))
+                    {
+                        <li>@note</li>
+                    }
+                </ul>
+                @if (Model.Notes.Count > 100)
+                {
+                    <div class="small text-muted mt-2">…dan @(Model.Notes.Count - 100) catatan lain.</div>
+                }
+            }
+        </div>
+    </div>
+}

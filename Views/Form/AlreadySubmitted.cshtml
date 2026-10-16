@@ -1,0 +1,95 @@
+@model FitToWorkApp.Models.ViewModels.FtwAlreadySubmittedViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Sudah Mengisi";
+    Layout = null;
+    var sub = Model.Submission;
+    var isFit = sub.KesiapanKerja.StartsWith("YA");
+    var isiLocal = Clock.ToLocal(sub.CreatedAt);
+    // Pengisian kemarin (mis. shift malam, jam reset 06:00) ditulis lengkap dengan tanggalnya
+    var waktuIsi = isiLocal.Date == Clock.Today
+        ? "pukul " + isiLocal.ToString("HH:mm")
+        : isiLocal.ToString("dd/MM/yyyy") + " pukul " + isiLocal.ToString("HH:mm");
+}
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - AKP Sehat</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@fontsource/source-sans-3@5.0.12/index.css" />
+    <link rel="stylesheet" href="~/lib/adminlte/css/adminlte.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/akp-theme.css" asp-append-version="true" />
+</head>
+<body class="akp-auth-bg">
+    <div class="container pt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="text-center mb-3"><img src="~/images/akp-sehat-logo.png" alt="AKP Sehat" style="max-width:120px" /></div>
+                <div class="card akp-auth-card text-center">
+                    <div class="card-body p-4 p-md-5">
+                        <div style="font-size:3rem;">ℹ️</div>
+                        <h4 class="mt-3">Halo, @sub.NamaSnapshot</h4>
+                        <p class="text-muted mb-1">
+                            Anda <strong>sudah mengisi Fit To Work</strong>
+                            @waktuIsi, dengan status:
+                        </p>
+
+                        @if (isFit)
+                        {
+                            <div class="alert alert-success">SIAP &amp; FIT UNTUK BEKERJA</div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger">TIDAK FIT / KURANG SEHAT</div>
+                        }
+
+                        <p class="mb-2">
+                            Pengisian berikutnya dibuka <strong>@Model.NextOpenText</strong>.
+                        </p>
+                        <p class="text-muted small mb-3">
+                            @if (Model.IzinIsiUlang)
+                            {
+                                <text>Tidak perlu mengisi lagi kecuali kondisi Anda berubah sejak pengisian terakhir.</text>
+                            }
+                            else
+                            {
+                                <text>Kalau kondisi Anda berubah, segera lapor ke atasan / petugas klinik.</text>
+                            }
+                            Anda akan otomatis kembali ke menu utama dalam <span id="countdown">@Model.DetikKembali</span> detik.
+                        </p>
+
+                        <div class="d-grid gap-2">
+                            <a asp-controller="Menu" asp-action="Index" class="btn btn-primary w-100">Kembali ke Menu Utama Sekarang</a>
+                            @if (Model.IzinIsiUlang)
+                            {
+                                <a asp-controller="Form" asp-action="Index" asp-route-force="true" class="btn btn-outline-secondary">
+                                    Kondisi Saya Berubah — Isi Ulang
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sudah mengisi di periode ini: otomatis kembali ke Menu setelah beberapa detik,
+        // kecuali karyawan memilih "Isi Ulang" secara sadar karena kondisinya berubah.
+        var seconds = @Model.DetikKembali;
+        var countdownEl = document.getElementById('countdown');
+        var timer = setInterval(function () {
+            seconds--;
+            countdownEl.textContent = seconds;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                window.location.href = '@Url.Action("Index", "Menu")';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

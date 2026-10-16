@@ -1,0 +1,87 @@
+@model List<Role>
+@using FitToWorkApp.Security
+@{
+    ViewData["Title"] = "Role & Hak Akses";
+    Layout = "_AdminLayout";
+    var access = (AdminAccess)ViewBag.Access;
+    var labels = Permissions.All.ToDictionary(p => p.Key, p => p.Label);
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Role &amp; Hak Akses</h4>
+        <div class="text-muted small">Atur menu apa saja yang boleh dibuka setiap role. Perubahan langsung berlaku (maks. 1 menit).</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-controller="Users" asp-action="Index">👤 User Admin</a>
+        <a class="btn btn-primary" asp-controller="Roles" asp-action="Create">+ Tambah Role</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Role</th>
+                    <th>Hak Akses</th>
+                    <th class="text-center">User</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    var canEdit = access.IsSuperAdmin || (!r.IsSuperAdmin && r.Permissions.All(access.Has));
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">
+                                @r.Name
+                                @if (r.IsSuperAdmin)
+                                {
+                                    <span class="badge bg-dark ms-1">Semua akses</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(r.Description))
+                            {
+                                <div class="text-muted small">@r.Description</div>
+                            }
+                        </td>
+                        <td>
+                            @if (r.IsSuperAdmin)
+                            {
+                                <span class="text-muted small">Semua menu, termasuk yang ditambahkan nanti</span>
+                            }
+                            else if (r.Permissions.Count == 0)
+                            {
+                                <span class="text-danger small">Tidak ada akses</span>
+                            }
+                            else
+                            {
+                                @foreach (var p in Permissions.All.Where(p => r.Permissions.Contains(p.Key)))
+                                {
+                                    <span class="badge text-bg-light border me-1 mb-1">@p.Label</span>
+                                }
+                            }
+                        </td>
+                        <td class="text-center">@r.UserCount</td>
+                        <td class="text-end text-nowrap">
+                            @if (canEdit)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary" asp-controller="Roles" asp-action="Edit" asp-route-id="@r.Id">Ubah</a>
+                                @if (!r.IsSuperAdmin)
+                                {
+                                    <form asp-controller="Roles" asp-action="Delete" asp-route-id="@r.Id" method="post" class="d-inline"
+                                          data-confirm="Hapus role '@r.Name'?" data-confirm-ok="Ya, Hapus">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" @(r.UserCount > 0 ? "disabled" : "")
+                                                title="@(r.UserCount > 0 ? "Masih dipakai user" : "Hapus role")">Hapus</button>
+                                    </form>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

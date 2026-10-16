@@ -1,0 +1,211 @@
+@model FitToWorkApp.Controllers.Admin.CheckupFormViewModel
+@inject FitToWorkApp.Services.IMedicalFileStorage Storage
+@using System.Globalization
+@{
+    ViewData["Title"] = "Input Pemeriksaan Kesehatan";
+    Layout = "_AdminLayout";
+    var parameters = (List<CheckupParameter>)ViewBag.Parameters;
+    var riskLevels = (List<CheckupRiskLevel>)ViewBag.RiskLevels;
+    var hasBmi = parameters.Any(p => p.InputType == CheckupInputTypes.Bmi);
+    string? Posted(int id) => Model.Values.TryGetValue(id, out var v) ? v : null;
+    string Inv(decimal? v) => v?.ToString("0.###", CultureInfo.InvariantCulture) ?? "";
+
+    // Konfigurasi untuk pratinjau skor di browser (yang disimpan tetap dihitung ulang di server)
+    var clientConfig = new
+    {
+        parameters = parameters.Select(p => new
+        {
+            id = p.Id, name = p.Name, unit = p.Unit, type = p.InputType, decimals = p.Decimals, scored = p.IsScored,
+            criteria = p.Criteria.Select(c => new
+            {
+                id = c.Id, label = c.Label, min = c.MinValue, max = c.MaxValue, match = c.MatchText, forSex = c.ForSex,
+                points = c.Points, level = c.Level
+            })
+        }),
+        riskLevels = riskLevels.Select(r => new { min = r.MinScore, max = r.MaxScore, label = r.Label, cls = RiskColors.BadgeClass(r.Color), description = r.Description }),
+        followUpHari = FitToWorkApp.Services.HealthRanges.FollowUpDefaultHari
+    };
+}
+
+<style>
+    .param-row { border-bottom: 1px solid var(--bs-border-color-translucent); padding: .6rem 0; }
+    .param-row:last-child { border-bottom: 0; }
+    .param-result { min-height: 1.4rem; }
+    .choice-param .btn { white-space: normal; }
+    .score-card { position: sticky; top: 1rem; }
+    .score-total { font-size: 2.5rem; font-weight: 700; line-height: 1; }
+</style>
+
+<div class="mb-4">
+    <a asp-controller="Checkups" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Pemeriksaan Kesehatan</a>
+    <h4 class="mb-0 mt-1">Input Pemeriksaan Kesehatan</h4>
+    <div class="text-muted small">Kosongkan yang tidak diperiksa. Poin & warna mengikuti menu Parameter &amp; Skor Pemkes (bukan diagnosis).</div>
+</div>
+
+<form asp-controller="Checkups" asp-action="Create" method="post" id="checkupForm" autocomplete="off" enctype="multipart/form-data"
+      data-umur="@Model.EmployeeUmur" data-jk="@Model.EmployeeJenisKelamin">
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Karyawan</label>
+                            <partial name="_EmployeePicker" model="(Model.EmployeeId, Model.EmployeeLabel)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="ExaminedAt">Waktu Pemeriksaan</label>
+                            <input asp-for="ExaminedAt" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Faktor Risiko &amp; Hasil Pemeriksaan</div>
+                <div class="card-body py-1">
+                    @if (parameters.Count == 0)
+                    {
+                        <div class="text-danger small py-2">Belum ada parameter pemkes yang aktif. Atur di menu Klinik &amp; Kesehatan &gt; Parameter &amp; Skor Pemkes.</div>
+                    }
+                    @foreach (var p in parameters)
+                    {
+                        var posted = Posted(p.Id);
+                        <div class="param-row row g-2 align-items-center" data-param="@p.Id">
+                            <div class="col-md-4">
+                                <div class="fw-semibold">@p.Name @if (!string.IsNullOrEmpty(p.Unit)) { <span class="text-muted fw-normal small">(@p.Unit)</span> }</div>
+                                @if (!string.IsNullOrEmpty(p.Hint))
+                                {
+                                    <div class="small text-muted">@p.Hint</div>
+                                }
+                                @if (!p.IsScored)
+                                {
+                                    <div class="small text-muted fst-italic">tidak dihitung ke skor</div>
+                                }
+                            </div>
+                            <div class="col-md-5">
+                                @switch (p.InputType)
+                                {
+                                    case CheckupInputTypes.Number:
+                                        <input type="number" class="form-control param-input" name="@($"Values[{p.Id}]")" value="@posted"
+                                               step="@(p.Decimals == 0 ? "1" : "any")" min="@Inv(p.MinInput)" max="@Inv(p.MaxInput)" inputmode="decimal" />
+                                        break;
+                                    case CheckupInputTypes.Choice:
+                                        <div class="btn-group btn-group-sm flex-wrap choice-param" role="group">
+                                            @foreach (var c in p.Criteria)
+                                            {
+                                                var cid = $"p{p.Id}c{c.Id}";
+                                                <input type="radio" class="btn-check param-input" name="@($"Values[{p.Id}]")" id="@cid" value="@c.Id" checked="@(posted == c.Id.ToString())" />
+                                                <label class="btn btn-outline-primary" for="@cid">@c.Label</label>
+                                            }
+                                        </div>
+                                        <button type="button" class="btn btn-link btn-sm px-1 py-0 param-clear" title="Kosongkan pilihan">kosongkan</button>
+                                        break;
+                                    case CheckupInputTypes.Age:
+                                        <div class="form-control-plaintext py-0"><span data-auto="age">-</span> <span class="small text-muted">(otomatis dari tanggal lahir)</span></div>
+                                        break;
+                                    case CheckupInputTypes.Sex:
+                                        <div class="form-control-plaintext py-0"><span data-auto="sex">-</span> <span class="small text-muted">(otomatis dari data karyawan)</span></div>
+                                        break;
+                                    case CheckupInputTypes.Bmi:
+                                        <div class="input-group input-group-sm mb-1">
+                                            <span class="input-group-text">BB</span>
+                                            <input asp-for="BeratBadan" type="number" step="0.1" min="20" max="300" class="form-control param-input bmi-input" placeholder="kg" />
+                                            <span class="input-group-text">TB</span>
+                                            <input asp-for="TinggiBadan" type="number" step="0.1" min="100" max="230" class="form-control param-input bmi-input" placeholder="cm" />
+                                        </div>
+                                        <div class="small">IMT: <span class="fw-semibold" data-auto="bmi">-</span></div>
+                                        break;
+                                }
+                            </div>
+                            <div class="col-md-3 text-md-end param-result" data-result="@p.Id"></div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="Keluhan">Keluhan (jika ada)</label>
+                        <textarea asp-for="Keluhan" class="form-control" rows="2" maxlength="1000"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" asp-for="Catatan">Catatan Pemeriksa</label>
+                        <textarea asp-for="Catatan" class="form-control" rows="2" maxlength="1000" placeholder="Saran / tindak lanjut (opsional)"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3" id="followUpCard">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Temuan &amp; Follow Up</span>
+                    <span class="small text-muted" id="abnormalHint"></span>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" asp-for="AdaTemuan" id="AdaTemuan" />
+                        <label class="form-check-label" for="AdaTemuan">Ada temuan, perlu follow up</label>
+                    </div>
+                    <div id="followUpFields" class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label" asp-for="TemuanKeterangan">Keterangan temuan / rencana follow up</label>
+                            <textarea asp-for="TemuanKeterangan" class="form-control" rows="2" maxlength="1000"
+                                      placeholder="mis. Kolesterol LDL 175, konsultasi dokter & kontrol ulang 1 bulan; kurangi gorengan"></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="FollowUpDate">Tanggal follow up</label>
+                            <input asp-for="FollowUpDate" type="date" class="form-control" asp-format="{0:yyyy-MM-dd}" />
+                            <div class="form-text">Usulan otomatis: @FitToWorkApp.Services.HealthRanges.FollowUpDefaultHari hari setelah pemeriksaan.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">📎 Upload Hasil Pemeriksaan <span class="text-muted fw-normal small">(opsional)</span></div>
+                <div class="card-body">
+                    <input type="file" name="Files" class="form-control" multiple accept="@Storage.AcceptAttribute" />
+                    <div class="form-text">PDF, JPG atau PNG (mis. hasil lab / foto hasil alat), maks. @(Storage.MaxFileBytes / 1024 / 1024) MB per file. Bisa ditambah lagi nanti di halaman detail.</div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Simpan Pemeriksaan</button>
+                <a asp-controller="Checkups" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm score-card">
+                <div class="card-header bg-white fw-semibold">Total Skor Risiko</div>
+                <div class="card-body text-center">
+                    <div class="score-total" id="scoreTotal">-</div>
+                    <div class="mt-2"><span class="badge fs-6" id="scoreRisk"></span></div>
+                    <div class="small text-muted mt-2" id="scoreDesc"></div>
+                    <div class="small text-muted" id="scoreFilled"></div>
+                </div>
+                <ul class="list-group list-group-flush small">
+                    @foreach (var r in riskLevels)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                            <span><span class="badge @RiskColors.BadgeClass(r.Color)">@r.Label</span></span>
+                            <span class="text-muted text-nowrap">@r.RangeLabel</span>
+                        </li>
+                    }
+                </ul>
+                <div class="card-footer small text-muted">Skor dihitung ulang oleh server saat disimpan.</div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        window.CHECKUP_CONFIG = @Json.Serialize(clientConfig);
+    </script>
+    <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    <script src="~/js/checkup-form.js" asp-append-version="true"></script>
+}

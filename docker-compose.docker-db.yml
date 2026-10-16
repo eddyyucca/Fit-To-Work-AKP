@@ -1,0 +1,30 @@
+version: "3.9"
+
+# Setup untuk SQL Server yang sudah jalan sebagai container terpisah:
+#   - Nama container SQL Server : mssql2022
+#   - Docker network            : mssql_default
+#
+# Cara pakai:
+#   docker compose -f docker-compose.docker-db.yml up --build -d
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fittowork-web
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      # "Server=" pakai NAMA CONTAINER SQL Server (mssql2022), bukan localhost/IP,
+      # karena web & mssql2022 saling terhubung lewat nama container di network "mssql_default".
+      # Ganti "sa" dan password di bawah sesuai kredensial SQL Server Anda yang sebenarnya.
+      ConnectionStrings__DefaultConnection: "Server=mssql2022,1433;Database=FitToWorkDb;User Id=sa;Password=GANTI_DENGAN_PASSWORD_SA_ANDA;TrustServerCertificate=True;"
+    ports:
+      - "8080:8080"
+    networks:
+      - mssql_default
+
+networks:
+  mssql_default:
+    external: true   # pakai network yang SUDAH ADA (dibuat otomatis oleh compose SQL Server Anda), jangan bikin baru

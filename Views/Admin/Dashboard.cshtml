@@ -1,0 +1,616 @@
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "_AdminLayout";
+    var trendDays = (int)ViewBag.TrendDays;
+    bool showFtw = ViewBag.ShowFtw;
+    bool showClinic = ViewBag.ShowClinic;
+    bool showGym = ViewBag.ShowGym;
+}
+
+<style>
+    .ftw-kpi .label {
+        font-size: .8rem;
+        color: #6c757d;
+    }
+
+    .ftw-kpi .value {
+        font-size: 1.9rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ftw-kpi .sub {
+        font-size: .75rem;
+        color: #6c757d;
+    }
+
+    .ftw-live-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+        background: #adb5bd;
+        margin-right: 6px;
+    }
+
+    .ftw-live-dot.on {
+        background: #1baf7a;
+        box-shadow: 0 0 0 0 rgba(27, 175, 122, .6);
+        animation: ftwPulse 1.8s infinite;
+    }
+
+    .ftw-live-dot.off {
+        background: #e34948;
+    }
+
+    @@keyframes ftwPulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(27, 175, 122, .55);
+        }
+
+        70% {
+            box-shadow: 0 0 0 8px rgba(27, 175, 122, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(27, 175, 122, 0);
+        }
+    }
+
+    .ftw-clock {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: .02em;
+    }
+
+    .ftw-clock small {
+        font-size: .8rem;
+        font-weight: 600;
+        color: #6c757d;
+        margin-left: 4px;
+    }
+
+    .ftw-chart {
+        position: relative;
+        height: 300px;
+    }
+
+    .ftw-chart-sm {
+        position: relative;
+        height: 260px;
+    }
+
+    .ftw-flash {
+        animation: ftwFlash 2.5s ease-out;
+    }
+
+    @@keyframes ftwFlash {
+        from {
+            background-color: #fff3cd;
+        }
+
+        to {
+            background-color: transparent;
+        }
+    }
+
+    .ftw-rank {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: .8rem;
+        background: #f1f3f5;
+    }
+
+    .ftw-rank.r1 {
+        background: #eda100;
+        color: #fff;
+    }
+
+    .ftw-rank.r2 {
+        background: #adb5bd;
+        color: #fff;
+    }
+
+    .ftw-rank.r3 {
+        background: #b87333;
+        color: #fff;
+    }
+
+    .ftw-ach { font-weight: 600; min-width: 56px; }
+    .ftw-ach.hijau { background: #d1f2e3; color: #0f5132; }
+    .ftw-ach.kuning { background: #fff3cd; color: #664d03; }
+    .ftw-ach.merah { background: #f8d7da; color: #842029; }
+    .ftw-ach-bar { height: 5px; background: #e9ecef; border-radius: 3px; overflow: hidden; margin-left: auto; max-width: 90px; }
+    .ftw-ach-bar > div { height: 100%; }
+    .ftw-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+    .ftw-sort::after { content: ' \2195'; opacity: .3; font-size: .75em; }
+    .ftw-sort.asc::after { content: ' \25B2'; opacity: .8; }
+    .ftw-sort.desc::after { content: ' \25BC'; opacity: .8; }
+    #sectionBody tr[data-section-id] { cursor: pointer; }
+
+    #toast-container>div {
+        opacity: .97;
+        width: 340px;
+    }
+
+    #toast-container .ftw-toast-meta {
+        font-size: .8rem;
+        opacity: .9;
+    }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+    <div>
+        <h4 class="mb-0">Dashboard AKP Sehat</h4>
+        <div class="small text-muted">@string.Join(" · ", new[] { showFtw ? "Fit To Work" : null, showClinic ? "Klinik" : null, showGym ? "Aktivitas Kebugaran" : null }.Where(x => x is not null))</div>
+    </div>
+    @* Status koneksi realtime (SignalR) untuk semua bagian dashboard *@
+    <div class="small text-muted d-flex align-items-center border rounded-pill px-3 py-1 bg-body" data-akp-live
+         title="Dashboard otomatis ter-update saat ada pengisian FTW, aktivitas kebugaran, atau kunjungan klinik">
+        <span class="ftw-live-dot"></span><span data-akp-live-text>Menghubungkan…</span>
+    </div>
+</div>
+
+@if (showFtw)
+{
+<div class="akp-section-title"><i class="bi bi-clipboard2-check"></i>Fit To Work</div>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h5 class="mb-0 text-muted fw-normal">Pengisian hari ini</h5>
+        <div class="text-muted small" id="ftwTanggal">&nbsp;</div>
+    </div>
+    <div class="text-end">
+        <div class="d-flex align-items-center justify-content-end gap-3">
+            <button type="button" class="btn btn-outline-danger btn-sm" id="btnExportPdf"
+                    title="Download ringkasan dashboard sebagai PDF (A4)">
+                <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                📄 Export PDF
+            </button>
+            <div class="ftw-clock" id="ftwClock">--:--:--</div>
+        </div>
+        <div class="small text-muted d-flex align-items-center justify-content-end">
+            <span>Data diperbarui: <span id="ftwUpdatedAt">-</span></span>
+        </div>
+    </div>
+</div>
+
+<!-- KPI hari ini (realtime) - gaya small-box sama dengan bagian Klinik & Gym -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg">
+        <div class="small-box text-bg-akp-navy mb-0">
+            <div class="inner"><h3 id="kpiTotal">-</h3><p>Karyawan aktif</p></div>
+            <i class="small-box-icon bi bi-people"></i>
+            <div class="small-box-footer">Target pengisian hari ini</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="small-box text-bg-akp-blue mb-0">
+            <div class="inner"><h3 id="kpiSudah">-</h3><p>Sudah isi hari ini</p></div>
+            <i class="small-box-icon bi bi-clipboard2-check"></i>
+            <div class="small-box-footer" id="kpiPersen">&nbsp;</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="small-box text-bg-akp-green mb-0">
+            <div class="inner"><h3 id="kpiFit">-</h3><p>Fit &amp; siap kerja</p></div>
+            <i class="small-box-icon bi bi-shield-check"></i>
+            <div class="small-box-footer">Status terakhir per karyawan</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="small-box text-bg-danger mb-0">
+            <div class="inner"><h3 id="kpiTidakFit">-</h3><p>Tidak fit</p></div>
+            <i class="small-box-icon bi bi-exclamation-triangle"></i>
+            <div class="small-box-footer">Perlu tindak lanjut pengawas</div>
+        </div>
+    </div>
+    <div class="col-12 col-lg">
+        <div class="small-box text-bg-secondary mb-0">
+            <div class="inner"><h3 id="kpiBelum">-</h3><p>Belum isi</p></div>
+            <i class="small-box-icon bi bi-hourglass-split"></i>
+            <div class="small-box-footer">Belum mengisi hari ini</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tren 20 hari -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <div class="fw-semibold">Total Register per Hari</div>
+                <div class="small text-muted">@trendDays hari terakhir · 1 karyawan dihitung 1x per hari</div>
+            </div>
+            <div class="card-body">
+                <div class="ftw-chart"><canvas id="chartTrend" aria-label="Line chart total register per hari"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="fw-semibold">Perbandingan Jadwal Kerja</div>
+                    <div class="small text-muted">Non Shift · Shift Pagi · Shift Malam, @trendDays hari terakhir</div>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Mode bar chart">
+                    <button type="button" class="btn btn-outline-secondary active"
+                            data-bar-mode="stacked">Tumpuk</button>
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bar-mode="grouped">Berdampingan</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="ftw-chart"><canvas id="chartShift" aria-label="Bar chart perbandingan shift"></canvas></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Doughnut + Top 10 -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="fw-semibold">Karyawan vs Sudah Register</div>
+                    <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Periode">
+                        <button type="button" class="btn btn-outline-primary active" data-period="day">Hari</button>
+                        <button type="button" class="btn btn-outline-primary" data-period="week">Minggu</button>
+                        <button type="button" class="btn btn-outline-primary" data-period="month">Bulan</button>
+                    </div>
+                </div>
+                <div class="small text-muted mt-1" id="coverageLabel">&nbsp;</div>
+            </div>
+            <div class="card-body">
+                <div class="ftw-chart-sm"><canvas id="chartCoverage"
+                                                      aria-label="Doughnut karyawan vs sudah register"></canvas></div>
+                    <div class="small text-muted text-center mt-2" id="coverageNote">&nbsp;</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-8">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">🏆 Top 10 Register Fit To Work</div>
+                    <div class="small text-muted">Paling konsisten mengisi dalam @trendDays hari terakhir</div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center">#</th>
+                                <th>Nama</th>
+                                <th>Jabatan</th>
+                                <th>Section</th>
+                                <th class="text-end">Hari Isi</th>
+                                <th class="text-end">Tidak Fit</th>
+                                <th class="text-end">Terakhir</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">Memuat…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pengisian FTW per Section: jumlah karyawan vs sudah isi + achievement -->
+    <div class="card shadow-sm border-0 mb-4" id="sectionCard">
+        <div class="card-header bg-white">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <div class="fw-semibold">Pengisian FTW per Section</div>
+                    <div class="small text-muted" id="sectionLabel">&nbsp;</div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+                    <span class="small text-muted">
+                        <span class="badge ftw-ach hijau">&ge; 90%</span>
+                        <span class="badge ftw-ach kuning">70–89%</span>
+                        <span class="badge ftw-ach merah">&lt; 70%</span>
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Periode per section">
+                        <button type="button" class="btn btn-outline-primary active" data-section-period="day">Hari</button>
+                        <button type="button" class="btn btn-outline-primary" data-section-period="week">Minggu</button>
+                        <button type="button" class="btn btn-outline-primary" data-section-period="month">Bulan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body pb-2">
+            <div class="ftw-chart"><canvas id="chartSection" aria-label="Bar chart target vs sudah isi per section"></canvas></div>
+            <div class="small text-muted mt-2" id="sectionNote">&nbsp;</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle" id="sectionTable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ftw-sort" data-sort="department">Department</th>
+                        <th class="ftw-sort" data-sort="section">Section</th>
+                        <th class="ftw-sort text-end" data-sort="jumlahKaryawan">Jumlah Karyawan</th>
+                        <th class="ftw-sort text-end" data-sort="sudahIsi">Sudah Isi</th>
+                        <th class="ftw-sort text-end" data-sort="belumIsi">Belum Isi</th>
+                        <th class="ftw-sort text-end" data-sort="fit">FIT</th>
+                        <th class="ftw-sort text-end" data-sort="tidakFit">Tidak Fit</th>
+                        <th class="ftw-sort text-end" data-sort="persen">Achievement</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="sectionBody">
+                    <tr><td colspan="9" class="text-center text-muted py-4">Memuat…</td></tr>
+                </tbody>
+                <tfoot id="sectionFoot" class="table-light fw-semibold"></tfoot>
+            </table>
+        </div>
+        <div class="card-footer bg-white small text-muted">
+            Klik baris section untuk melihat karyawan yang belum isi. Section mengikuti Data Karyawan saat ini, hanya karyawan AKP aktif.
+            Karyawan yang libur / cuti / off shift tetap terhitung belum isi.
+        </div>
+    </div>
+
+    <!-- Modal: karyawan yang belum isi di satu section -->
+    <div class="modal fade" id="sectionDetailModal" tabindex="-1" aria-labelledby="sectionDetailTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="sectionDetailTitle">Belum Isi</h5>
+                        <div class="small text-muted" id="sectionDetailSub">&nbsp;</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body p-0" id="sectionDetailBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pengisian terbaru hari ini (realtime) -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white fw-semibold">Pengisian Terbaru Hari Ini</div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Jam</th>
+                        <th>Nama</th>
+                        <th>Jabatan</th>
+                        <th>Section</th>
+                        <th>Jadwal</th>
+                        <th>Kesiapan</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="recentBody">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">Memuat…</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal detail pengisian (dipakai bersama dengan Riwayat Pengisian) -->
+    <partial name="_SubmissionDetailModal" />
+}
+
+@if (showClinic)
+{
+    <div class="akp-section-title"><i class="bi bi-hospital"></i>Klinik</div>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="small text-muted" id="clinicLabel">&nbsp;</div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Periode klinik">
+            <button type="button" class="btn btn-outline-primary active" data-clinic-period="day">Hari</button>
+            <button type="button" class="btn btn-outline-primary" data-clinic-period="week">Minggu</button>
+            <button type="button" class="btn btn-outline-primary" data-clinic-period="month">Bulan</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-blue mb-0">
+                <div class="inner"><h3 id="clTotal">-</h3><p>Kunjungan klinik</p></div>
+                <i class="small-box-icon bi bi-hospital"></i>
+                <div class="small-box-footer" id="clKaryawan">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-teal mb-0">
+                <div class="inner"><h3 id="clKembali">-</h3><p>Kembali bekerja / kerja terbatas</p></div>
+                <i class="small-box-icon bi bi-person-check"></i>
+                <div class="small-box-footer" id="clTerbatas">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-warning mb-0">
+                <div class="inner"><h3 id="clIstirahat">-</h3><p>Rekomendasi istirahat</p></div>
+                <i class="small-box-icon bi bi-house-heart"></i>
+                <div class="small-box-footer" id="clHari">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-danger mb-0">
+                <div class="inner"><h3 id="clRujuk">-</h3><p>Dirujuk ke RS/Faskes</p></div>
+                <i class="small-box-icon bi bi-truck-front"></i>
+                <div class="small-box-footer" id="clObat">&nbsp;</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-xl-12">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">Riwayat Kunjungan Klinik</div>
+                    <div class="small text-muted" id="clTrendNote">&nbsp;</div>
+                </div>
+                <div class="card-body"><div class="ftw-chart-sm"><canvas id="chartClinicTrend" aria-label="Grafik jumlah kunjungan klinik"></canvas></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-xl-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">Top 10 Jenis Penyakit</div>
+                    <div class="small text-muted">Satu kunjungan bisa punya lebih dari satu diagnosa</div>
+                </div>
+                <div class="card-body"><div class="ftw-chart"><canvas id="chartTopDisease" aria-label="Top 10 jenis penyakit"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">Department dengan Kunjungan Terbanyak</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light"><tr><th class="text-center">#</th><th>Department</th><th class="text-end">Kunjungan</th><th class="text-end">Karyawan</th><th style="width:30%"></th></tr></thead>
+                        <tbody id="clDeptBody"><tr><td colspan="5" class="text-center text-muted py-4">Memuat…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showGym)
+{
+    <div class="akp-section-title"><i class="bi bi-activity"></i>Aktivitas Kebugaran</div>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="small text-muted d-flex flex-wrap align-items-center gap-2">
+            <span id="gymLabel">&nbsp;</span>
+            <span class="badge text-bg-success" id="gmLive"></span>
+            <span class="badge text-bg-warning d-none" id="gmTidakCheckout"></span>
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Periode aktivitas">
+            <button type="button" class="btn btn-outline-primary active" data-gym-period="day">Hari</button>
+            <button type="button" class="btn btn-outline-primary" data-gym-period="week">Minggu</button>
+            <button type="button" class="btn btn-outline-primary" data-gym-period="month">Bulan</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-green mb-0">
+                <div class="inner"><h3 id="gmTotal">-</h3><p>Sesi aktivitas</p></div>
+                <i class="small-box-icon bi bi-activity"></i>
+                <div class="small-box-footer" id="gmRata">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-teal mb-0">
+                <div class="inner"><h3 id="gmUnik">-</h3><p>Karyawan berolahraga</p></div>
+                <i class="small-box-icon bi bi-people"></i>
+                <div class="small-box-footer" id="gmDari">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-blue mb-0">
+                <div class="inner"><h3 id="gmPersen">-</h3><p>Partisipasi karyawan</p></div>
+                <i class="small-box-icon bi bi-pie-chart"></i>
+                <div class="small-box-footer" id="gmBelum">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box text-bg-akp-navy mb-0">
+                <div class="inner"><h3 id="gmPeak" style="font-size:1.6rem">-</h3><p>Jam tersibuk</p></div>
+                <i class="small-box-icon bi bi-clock-history"></i>
+                <div class="small-box-footer" id="gmPeakJumlah">&nbsp;</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">Sesi Aktivitas per Jam</div>
+                    <div class="small text-muted">Jumlah sesi menurut jam mulai (WITA) · batang gelap = jam tersibuk</div>
+                </div>
+                <div class="card-body"><div class="ftw-chart"><canvas id="chartGymHour" aria-label="Grafik sesi aktivitas per jam"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">Karyawan Aktif vs Berolahraga</div>
+                    <div class="small text-muted">Karyawan berbeda yang minimal 1x beraktivitas</div>
+                </div>
+                <div class="card-body"><div class="ftw-chart-sm"><canvas id="chartGymShare" aria-label="Persentase karyawan yang berolahraga"></canvas></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-xl-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <div class="fw-semibold">Per Jenis Aktivitas</div>
+                    <div class="small text-muted" id="gmJarakTotal">&nbsp;</div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Aktivitas</th><th class="text-end">Sesi</th><th class="text-end">Karyawan</th><th class="text-end">Rata-rata</th><th class="text-end">Jarak</th></tr>
+                        </thead>
+                        <tbody id="gmActBody"><tr><td colspan="5" class="text-center text-muted py-4">Memuat…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">🏆 Top 10 Paling Aktif</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th class="text-center">#</th><th>Nama</th><th>Department</th><th class="text-end">Sesi</th><th class="text-end">Total durasi</th><th class="text-end">Jarak</th><th class="text-end">Berat terakhir</th></tr>
+                        </thead>
+                        <tbody id="gmTopBody"><tr><td colspan="7" class="text-center text-muted py-4">Memuat…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+    @section Scripts {
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+        <script>window.AKP_HUB_URL = '@Url.Content("~/hubs/dashboard")';</script>
+        <script src="~/js/dashboard-hub.js" asp-append-version="true"></script>
+        @if (showFtw)
+        {
+            <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+            <script>
+                window.FTW_DASHBOARD = {
+                    dataUrl: '@Url.Action("DashboardData", "Admin")',
+                    sectionUrl: '@Url.Action("DashboardSection", "Admin")',
+                    sectionDetailUrl: '@Url.Action("DashboardSectionDetail", "Admin")'
+                };
+            </script>
+            <script src="~/js/submission-detail.js" asp-append-version="true"></script>
+            <script src="~/js/dashboard.js" asp-append-version="true"></script>
+            <script src="~/js/dashboard-section.js" asp-append-version="true"></script>
+            <script src="~/js/dashboard-pdf.js" asp-append-version="true"></script>
+        }
+        <script>
+            window.AKP_DASH_EXTRA = {
+                clinicUrl: @Json.Serialize(showClinic ? Url.Action("DashboardClinic", "Admin") : null),
+                gymUrl: @Json.Serialize(showGym ? Url.Action("DashboardGym", "Admin") : null)
+            };
+        </script>
+        <script src="~/js/dashboard-extra.js" asp-append-version="true"></script>
+    }

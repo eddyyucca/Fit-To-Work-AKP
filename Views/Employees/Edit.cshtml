@@ -1,0 +1,19 @@
+@model EmployeeFormViewModel
+@{
+    ViewData["Title"] = "Edit Karyawan";
+    Layout = "_AdminLayout";
+}
+
+<h4 class="mb-4">Edit Karyawan — @Model.Nama</h4>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <form asp-controller="Employees" asp-action="Edit" asp-route-id="@Model.Id" method="post">
+            <partial name="_Form" />
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

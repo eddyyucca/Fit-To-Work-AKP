@@ -1,0 +1,238 @@
+@using FitToWorkApp.Services
+@model FitToWorkApp.Models.ViewModels.EmployeeImportPreview
+@{
+    ViewData["Title"] = "Pratinjau Import Karyawan";
+    Layout = "_AdminLayout";
+    var postedAct = ViewBag.Act as List<string?>;
+    var postedMap = ViewBag.Map as List<int?>;
+    var kinds = new[] { OrgKind.Position, OrgKind.Division, OrgKind.Department };
+
+    string ActionFor(int i, OrgUnknown u) =>
+        postedAct?.ElementAtOrDefault(i) ?? EmployeeImportRules.ActionCode(u.DefaultAction);
+    int? MapFor(int i, OrgUnknown u) =>
+        postedAct is not null ? postedMap?.ElementAtOrDefault(i) : u.SuggestedId;
+    string RowsText(OrgUnknown u) =>
+        string.Join(", ", u.RowNumbers.Take(6)) + (u.RowNumbers.Count > 6 ? ", …" : "");
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Pratinjau Import Data Karyawan</h4>
+        <div class="text-muted small">File: @Model.FileName · Belum ada data yang disimpan.</div>
+    </div>
+    <a asp-controller="Employees" asp-action="Import" class="btn btn-outline-secondary btn-sm">← Upload ulang</a>
+</div>
+
+<div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm border-0"><div class="card-body">
+            <div class="text-muted small">Total Baris</div>
+            <div class="fs-4 fw-bold">@Model.TotalRows</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm border-0"><div class="card-body">
+            <div class="text-muted small">Karyawan Baru</div>
+            <div class="fs-4 fw-bold text-success">@Model.TotalNew</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm border-0"><div class="card-body">
+            <div class="text-muted small">Akan Diperbarui</div>
+            <div class="fs-4 fw-bold text-info">@Model.TotalUpdate</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm border-0"><div class="card-body">
+            <div class="text-muted small">Gagal (tidak disimpan)</div>
+            <div class="fs-4 fw-bold text-danger">@Model.TotalFailed</div>
+        </div></div>
+    </div>
+</div>
+
+<form asp-controller="Employees" asp-action="ImportConfirm" method="post" id="importConfirmForm" autocomplete="off">
+    <input type="hidden" name="token" value="@Model.Token" />
+
+    @if (Model.Unknowns.Count > 0)
+    {
+        <div class="card shadow-sm border-warning mb-4">
+            <div class="card-header bg-warning-subtle fw-semibold">
+                Perlu keputusan: @Model.Unknowns.Count nama belum ada di Data Organisasi
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">
+                    Pilih untuk setiap nama: <strong>tambahkan</strong> sebagai data baru, <strong>pakai yang sudah ada</strong>
+                    (kalau sebenarnya salah ketik / beda penulisan), <strong>aktifkan lagi</strong> (kalau ada tapi nonaktif),
+                    atau <strong>kosongkan</strong>. Usulan yang paling mirip sudah dipilihkan otomatis — periksa dulu sebelum menyimpan.
+                </p>
+
+                @foreach (var kind in kinds)
+                {
+                    var items = Model.Unknowns.Select((u, i) => (u, i)).Where(t => t.u.Kind == kind).ToList();
+                    if (items.Count == 0) { continue; }
+                    var actives = Model.Masters[kind].Where(m => m.IsActive).OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                    var label = EmployeeImportRules.Label(kind);
+
+                    <h6 class="mt-2">@label</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:22%">Tertulis di Excel</th>
+                                    <th style="width:14%">Dipakai di</th>
+                                    <th>Tindakan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (u, i) in items)
+                                {
+                                    var act = ActionFor(i, u);
+                                    var mapId = MapFor(i, u);
+                                    var group = "act_" + i;
+                                    <tr data-unknown="@i">
+                                        <td class="fw-semibold">@u.Text</td>
+                                        <td class="small">
+                                            @u.Count baris
+                                            <div class="text-muted">baris @RowsText(u)</div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-column gap-1 small">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="@($"act[{i}]")" id="@(group + "_add")" value="add" checked="@(act == "add")" />
+                                                    <label class="form-check-label" for="@(group + "_add")">Tambahkan <strong>@u.Text</strong> sebagai @label.ToLowerInvariant() baru</label>
+                                                </div>
+                                                @if (u.InactiveId is not null)
+                                                {
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="@($"act[{i}]")" id="@(group + "_reactivate")" value="reactivate" checked="@(act == "reactivate")" />
+                                                        <label class="form-check-label" for="@(group + "_reactivate")">Aktifkan lagi <strong>@u.Text</strong> (sudah ada, sedang nonaktif)</label>
+                                                    </div>
+                                                }
+                                                <div class="form-check d-flex flex-wrap align-items-center gap-2">
+                                                    <input class="form-check-input" type="radio" name="@($"act[{i}]")" id="@(group + "_map")" value="map" checked="@(act == "map")" />
+                                                    <label class="form-check-label" for="@(group + "_map")">Perbaiki, pakai yang sudah ada:</label>
+                                                    <select class="form-select form-select-sm w-auto" name="@($"map[{i}]")" data-map-for="@(group + "_map")">
+                                                        <option value="">— pilih @label.ToLowerInvariant() —</option>
+                                                        @foreach (var m in actives)
+                                                        {
+                                                            <option value="@m.Id" selected="@(m.Id == mapId)">@m.Name@(m.Id == u.SuggestedId ? "  (paling mirip)" : "")</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="@($"act[{i}]")" id="@(group + "_clear")" value="clear" checked="@(act == "clear")" />
+                                                    <label class="form-check-label" for="@(group + "_clear")">Kosongkan @label.ToLowerInvariant() untuk baris-baris ini</label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <button type="submit" class="btn btn-primary" id="importConfirmBtn" disabled="@(Model.TotalValid == 0)">
+            <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+            <span data-text>Simpan @Model.TotalValid baris</span>
+        </button>
+        <a asp-controller="Employees" asp-action="Import" class="btn btn-outline-secondary">Batal</a>
+        @if (Model.TotalFailed > 0)
+        {
+            <span class="small text-danger">@Model.TotalFailed baris gagal tidak ikut disimpan — perbaiki di Excel lalu import ulang.</span>
+        }
+    </div>
+</form>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white fw-semibold">Isi file</div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle datatable" data-order='[]'>
+            <thead class="table-light">
+                <tr>
+                    <th>Baris</th>
+                    <th>NIP</th>
+                    <th>Nama</th>
+                    <th>Section</th>
+                    <th>Jabatan</th>
+                    <th>Division</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Keterangan</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr class="@(r.IsValid ? "" : "table-danger")">
+                        <td>@r.RowNumber</td>
+                        <td>@r.NIP</td>
+                        <td>@r.Nama</td>
+                        <td>@r.SectionName</td>
+                        @foreach (var kind in kinds)
+                        {
+                            var text = r.TextOf(kind);
+                            var unknown = r.IsValid && r.IdOf(kind) is null ? Model.UnknownFor(kind, text) : null;
+                            <td>
+                                @text
+                                @if (unknown is not null)
+                                {
+                                    <span class="badge bg-warning text-dark ms-1">perlu keputusan</span>
+                                }
+                            </td>
+                        }
+                        <td>
+                            @if (!r.IsValid)
+                            {
+                                <span class="badge bg-danger">Gagal</span>
+                            }
+                            else if (r.IsNew)
+                            {
+                                <span class="badge bg-success">Baru</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-info text-dark">Diperbarui</span>
+                            }
+                        </td>
+                        <td class="small">@r.Error</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            'use strict';
+            var form = document.getElementById('importConfirmForm');
+            if (!form) return;
+
+            // Memilih dari dropdown otomatis memilih opsi "Perbaiki, pakai yang sudah ada"
+            form.querySelectorAll('select[data-map-for]').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    var radio = document.getElementById(sel.dataset.mapFor);
+                    if (radio && sel.value) radio.checked = true;
+                });
+            });
+
+            // Cegah klik Simpan berkali-kali
+            form.addEventListener('submit', function (e) {
+                var btn = document.getElementById('importConfirmBtn');
+                if (btn.dataset.submitting === 'true') { e.preventDefault(); return; }
+                btn.dataset.submitting = 'true';
+                btn.disabled = true;
+                btn.querySelector('.spinner-border').classList.remove('d-none');
+                btn.querySelector('[data-text]').textContent = 'Menyimpan...';
+            });
+        })();
+    </script>
+}

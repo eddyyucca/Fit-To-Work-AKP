@@ -1,0 +1,191 @@
+@using FitToWorkApp.Repositories
+@using FitToWorkApp.Controllers.Admin
+@{
+    ViewData["Title"] = "Reset Data";
+    Layout = "_AdminLayout";
+    var counts = (Dictionary<string, int>)ViewBag.Counts;
+    var groups = ResetModules.All.GroupBy(m => m.Group);
+    // Untuk JS: modul -> modul yang wajib ikut
+    var requires = ResetModules.All.ToDictionary(m => m.Key, m => m.Requires);
+    var labels = ResetModules.All.ToDictionary(m => m.Key, m => m.Label);
+}
+
+<style>
+    .reset-item { border: 1px solid var(--bs-border-color); border-radius: .6rem; padding: .75rem .9rem; transition: background-color .15s, border-color .15s; }
+    .reset-item:has(input:checked) { background: rgba(220, 53, 69, .06); border-color: rgba(220, 53, 69, .45); }
+    .reset-item .form-check-input { margin-top: .3rem; }
+    .reset-item .req { font-size: .75rem; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Reset Data</h4>
+        <div class="text-muted small">Mengosongkan data per modul, misalnya setelah uji coba sebelum aplikasi dipakai resmi. Hanya Super Admin.</div>
+    </div>
+</div>
+
+<div class="alert alert-danger d-flex gap-2 align-items-start">
+    <i class="bi bi-exclamation-octagon-fill fs-5"></i>
+    <div>
+        <strong>Data yang direset terhapus permanen dan tidak bisa dikembalikan.</strong>
+        Backup database dulu sebelum melanjutkan. Akun admin, role, organisasi, master form, kategori penyakit dan satuan obat <u>tidak</u> ikut terhapus.
+    </div>
+</div>
+
+<form asp-action="Execute" method="post" id="resetForm" autocomplete="off"
+      data-confirm="Hapus permanen data yang dipilih?" data-confirm-ok="Ya, Reset Permanen">
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h3 class="card-title mb-0">1. Pilih modul</h3>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="chkAll" />
+                <label class="form-check-label fw-semibold" for="chkAll">Pilih semua</label>
+            </div>
+        </div>
+        <div class="card-body">
+            @foreach (var g in groups)
+            {
+                <div class="d-flex align-items-center gap-2 mb-2 mt-1">
+                    <h6 class="mb-0 text-uppercase small text-muted fw-bold">@g.Key</h6>
+                    <div class="form-check form-check-inline mb-0 ms-2">
+                        <input class="form-check-input js-group" type="checkbox" id="grp_@g.First().Key" data-group="@g.Key" />
+                        <label class="form-check-label small" for="grp_@g.First().Key">pilih semua @g.Key.ToLowerInvariant()</label>
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    @foreach (var m in g)
+                    {
+                        var n = counts.TryGetValue(m.Key, out var c) ? c : 0;
+                        <div class="col-md-6 col-xl-4">
+                            <label class="reset-item form-check d-flex gap-2 h-100 mb-0" for="m_@m.Key">
+                                <input class="form-check-input flex-shrink-0 js-module" type="checkbox" name="modules" value="@m.Key" id="m_@m.Key" data-group="@m.Group" />
+                                <span class="flex-grow-1">
+                                    <span class="d-flex justify-content-between gap-2">
+                                        <span class="fw-semibold">@m.Label</span>
+                                        <span class="badge @(n > 0 ? "text-bg-secondary" : "text-bg-light border")">@n.ToString("N0") data</span>
+                                    </span>
+                                    <span class="d-block small text-muted">@m.Description</span>
+                                    @if (m.Requires.Length > 0)
+                                    {
+                                        <span class="d-block req text-danger mt-1"><i class="bi bi-link-45deg"></i> Otomatis ikut: @string.Join(", ", m.Requires.Select(r => labels[r]))</span>
+                                    }
+                                </span>
+                            </label>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-danger">
+        <div class="card-header"><h3 class="card-title mb-0">2. Konfirmasi</h3></div>
+        <div class="card-body">
+            <div class="mb-3" id="resetSummary"><span class="text-muted">Belum ada modul yang dipilih.</span></div>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label" for="confirmText">Ketik <code>@DataResetController.ConfirmationText</code> untuk melanjutkan</label>
+                    <input class="form-control" name="confirmText" id="confirmText" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="password">Password akun Anda</label>
+                    <input class="form-control" type="password" name="password" id="password" autocomplete="current-password" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-danger w-100" id="btnReset" disabled>
+                        <i class="bi bi-trash3 me-1"></i>Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            'use strict';
+            const requires = @Json.Serialize(requires);
+            const labels = @Json.Serialize(labels);
+            const counts = @Json.Serialize(counts);
+            const confirmWord = @Json.Serialize(DataResetController.ConfirmationText);
+
+            const form = document.getElementById('resetForm');
+            const boxes = [...form.querySelectorAll('.js-module')];
+            const byKey = Object.fromEntries(boxes.map((b) => [b.value, b]));
+            const chkAll = document.getElementById('chkAll');
+            const groups = [...form.querySelectorAll('.js-group')];
+            const btn = document.getElementById('btnReset');
+            const confirmText = document.getElementById('confirmText');
+            const password = document.getElementById('password');
+            const summary = document.getElementById('resetSummary');
+            const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+            // Modul yang dipilih + semua yang wajib ikut
+            function required() {
+                const set = new Set(boxes.filter((b) => b.checked && !b.dataset.auto).map((b) => b.value));
+                let added = true;
+                while (added) {
+                    added = false;
+                    [...set].forEach((k) => (requires[k] || []).forEach((r) => { if (!set.has(r)) { set.add(r); added = true; } }));
+                }
+                return set;
+            }
+
+            function sync() {
+                // Kunci (centang + disable) modul yang wajib ikut karena dependensi
+                const manual = new Set(boxes.filter((b) => b.checked && !b.dataset.auto).map((b) => b.value));
+                const all = required();
+                boxes.forEach((b) => {
+                    const auto = all.has(b.value) && !manual.has(b.value);
+                    b.dataset.auto = auto ? '1' : '';
+                    if (!auto) delete b.dataset.auto;
+                    b.checked = all.has(b.value);
+                    b.disabled = auto;
+                });
+
+                chkAll.checked = boxes.every((b) => b.checked);
+                chkAll.indeterminate = !chkAll.checked && boxes.some((b) => b.checked);
+                groups.forEach((g) => {
+                    const members = boxes.filter((b) => b.dataset.group === g.dataset.group);
+                    g.checked = members.every((b) => b.checked);
+                    g.indeterminate = !g.checked && members.some((b) => b.checked);
+                });
+
+                const list = [...all];
+                const total = list.reduce((s, k) => s + (counts[k] || 0), 0);
+                summary.innerHTML = list.length
+                    ? `<div class="fw-semibold text-danger mb-1">Akan dihapus ${total.toLocaleString('id-ID')} data dari ${list.length} modul:</div>` +
+                      '<div class="d-flex flex-wrap gap-1">' +
+                      list.map((k) => `<span class="badge text-bg-danger">${esc(labels[k])} · ${(counts[k] || 0).toLocaleString('id-ID')}</span>`).join('') +
+                      '</div>'
+                    : '<span class="text-muted">Belum ada modul yang dipilih.</span>';
+
+                btn.disabled = !(list.length && confirmText.value.trim() === confirmWord && password.value);
+                form.dataset.confirm = `Hapus PERMANEN ${total.toLocaleString('id-ID')} data dari ${list.length} modul (${list.map((k) => labels[k]).join(', ')})? Tindakan ini tidak bisa dibatalkan.`;
+            }
+
+            boxes.forEach((b) => b.addEventListener('change', () => { delete b.dataset.auto; sync(); }));
+            chkAll.addEventListener('change', () => {
+                boxes.forEach((b) => { b.checked = chkAll.checked; delete b.dataset.auto; });
+                sync();
+            });
+            groups.forEach((g) => g.addEventListener('change', () => {
+                boxes.filter((b) => b.dataset.group === g.dataset.group).forEach((b) => { b.checked = g.checked; delete b.dataset.auto; });
+                sync();
+            }));
+            [confirmText, password].forEach((el) => el.addEventListener('input', sync));
+
+            // Modal konfirmasi global (_AdminLayout, atribut data-confirm) tampil dulu; setelah "Ya" form dikirim ulang.
+            // Checkbox yang disabled tidak ikut terkirim -> diaktifkan sebentar (server tetap melengkapi dependensi).
+            form.addEventListener('submit', (e) => {
+                if (e.defaultPrevented) return;          // masih menunggu konfirmasi
+                boxes.forEach((b) => { b.disabled = false; });
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses…';
+            });
+
+            sync();
+        })();
+    </script>
+}

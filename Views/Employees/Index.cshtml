@@ -1,0 +1,250 @@
+@{
+    ViewData["Title"] = "Data Karyawan";
+    Layout = "_AdminLayout";
+    var totalKaryawan = (int)ViewBag.TotalKaryawan;
+    var divisionOptions = (List<FitToWorkApp.Models.Division>)ViewBag.DivisionOptions;
+    var departmentOptions = (List<FitToWorkApp.Models.Department>)ViewBag.DepartmentOptions;
+    var sectionOptions = (List<FitToWorkApp.Models.Section>)ViewBag.SectionOptions;
+    var positionOptions = (List<FitToWorkApp.Models.Position>)ViewBag.PositionOptions;
+}
+
+<style>
+    #employeesTable td { vertical-align: middle; }
+    #employeesTable td.text-nowrap .btn + .btn { margin-left: 4px; }
+    .dataTables_processing { background: rgba(255,255,255,.85) !important; border: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+</style>
+
+@* Token anti-forgery untuk semua request POST dari JavaScript (dikirim lewat header "RequestVerificationToken") *@
+@Html.AntiForgeryToken()
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h4 class="mb-0">Data Karyawan</h4>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-success" id="btnExportEmployees" title="Download sesuai filter status & pencarian yang aktif">
+            <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
+        </button>
+        <a class="btn btn-outline-primary" asp-controller="Employees" asp-action="Import"><i class="bi bi-upload me-1"></i>Import dari Excel</a>
+        <a class="btn btn-outline-primary" asp-controller="Employees" asp-action="HrisSync"><i class="bi bi-arrow-repeat me-1"></i>Sinkron HRIS</a>
+        <button type="button" class="btn btn-primary" id="btnAddEmployee">+ Tambah Karyawan</button>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteAllModal">
+            🗑️ Hapus Semua Data
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body pb-0">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <label class="small text-muted" for="statusFilter">Status:</label>
+            <select id="statusFilter" class="form-select form-select-sm" style="width:auto">
+                <option value="">Semua</option>
+                <option value="active">Aktif</option>
+                <option value="inactive">Nonaktif</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            @* Sengaja TIDAK pakai class "datatable" supaya tidak ikut di-init otomatis oleh _AdminLayout (client-side). *@
+            <table class="table mb-0 align-middle w-100" id="employeesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>NIP</th>
+                        <th>Nama</th>
+                        <th>Division</th>
+                        <th>Department</th>
+                        <th>Section</th>
+                        <th>Position</th>
+                        <th>No. HP</th>
+                        <th>Status</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal tambah / edit karyawan -->
+<div class="modal fade" id="employeeModal" tabindex="-1" aria-labelledby="employeeModalTitle" aria-hidden="true"
+     data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="employeeForm" novalidate autocomplete="off">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="employeeModalTitle">Tambah Karyawan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger small d-none" id="employeeFormError"></div>
+
+                    <input type="hidden" name="Id" value="0" />
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="fNIP">NIP <span class="text-danger">*</span></label>
+                            <input id="fNIP" name="NIP" class="form-control" maxlength="30" required />
+                            <div class="invalid-feedback" data-error-for="NIP"></div>
+                            <div class="form-text">Dipakai karyawan untuk masuk ke halaman Fit To Work.</div>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label" for="fNama">Nama <span class="text-danger">*</span></label>
+                            <input id="fNama" name="Nama" class="form-control" maxlength="150" required />
+                            <div class="invalid-feedback" data-error-for="Nama"></div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label" for="fNomorHp">Nomor HP</label>
+                            <input id="fNomorHp" name="NomorHp" class="form-control" maxlength="20" inputmode="tel" />
+                            <div class="invalid-feedback" data-error-for="NomorHp"></div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="fTanggalLahir">Tanggal Lahir</label>
+                            <input id="fTanggalLahir" name="TanggalLahir" type="date" data-max-today="true" class="form-control" />
+                            <div class="form-text">Dipakai karyawan untuk login Riwayat Saya.</div>
+                            <div class="invalid-feedback" data-error-for="TanggalLahir"></div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label" for="fJenisKelamin">Jenis Kelamin</label>
+                            <select id="fJenisKelamin" name="JenisKelamin" class="form-select">
+                                <option value="">-</option>
+                                <option value="L">Laki-laki</option>
+                                <option value="P">Perempuan</option>
+                            </select>
+                            <div class="invalid-feedback" data-error-for="JenisKelamin"></div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="fDivisionId">Division</label>
+                            <select id="fDivisionId" name="DivisionId" class="form-select">
+                                <option value="">-- Pilih Division --</option>
+                                @foreach (var dv in divisionOptions)
+                                {
+                                    <option value="@dv.Id">@dv.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="fDepartmentId">Department</label>
+                            <select id="fDepartmentId" name="DepartmentId" class="form-select">
+                                <option value="">-- Pilih Department --</option>
+                                @foreach (var d in departmentOptions)
+                                {
+                                    <option value="@d.Id">@d.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="fSectionId">Section <span class="text-danger">*</span></label>
+                            <select id="fSectionId" name="SectionId" class="form-select" required>
+                                <option value="">-- Pilih Section --</option>
+                                @foreach (var s in sectionOptions)
+                                {
+                                    <option value="@s.Id">@s.Name</option>
+                                }
+                            </select>
+                            <div class="invalid-feedback" data-error-for="SectionId"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="fPositionId">Position / Jabatan</label>
+                            <select id="fPositionId" name="PositionId" class="form-select">
+                                <option value="">-- Pilih Position --</option>
+                                @foreach (var p in positionOptions)
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (divisionOptions.Count == 0 || departmentOptions.Count == 0 || sectionOptions.Count == 0 || positionOptions.Count == 0)
+                    {
+                        <div class="alert alert-warning small">
+                            Beberapa daftar Division/Department/Section/Position masih kosong. Lengkapi dulu lewat menu
+                            <a asp-controller="Organization" asp-action="Index">🏢 Data Organisasi</a>.
+                        </div>
+                    }
+
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="fIsActive" name="IsActive" checked />
+                        <label class="form-check-label" for="fIsActive">Karyawan Aktif</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary" id="btnSaveEmployee">
+                        <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                        Simpan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal detail karyawan (isi dari Admin/Employees/Detail/{id}) -->
+<div class="modal fade" id="employeeDetailModal" tabindex="-1" aria-labelledby="employeeDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="employeeDetailTitle">Detail Karyawan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body bg-body-tertiary" id="employeeDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-primary" id="btnDetailEdit"><i class="bi bi-pencil-square me-1"></i>Edit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal konfirmasi hapus semua data karyawan -->
+<div class="modal fade" id="deleteAllModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-controller="Employees" asp-action="DeleteAll" method="post">
+                <div class="modal-header border-danger">
+                    <h5 class="modal-title text-danger">⚠️ Hapus SEMUA Data Karyawan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger small mb-3">
+                        <strong>Tindakan ini TIDAK BISA DIBATALKAN.</strong> Semua data karyawan
+                        (saat ini <strong>@totalKaryawan orang</strong>) akan dihapus permanen,
+                        <strong>beserta seluruh riwayat pengisian Fit To Work mereka</strong>.
+                        Pertimbangkan untuk backup database dulu sebelum melanjutkan.
+                    </div>
+                    <label class="form-label">Ketik <code>HAPUS SEMUA</code> untuk konfirmasi:</label>
+                    <input type="text" name="confirmText" class="form-control" autocomplete="off"
+                           placeholder="HAPUS SEMUA" required />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-danger">Ya, Hapus Semua Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.FTW_EMPLOYEES = {
+            dataUrl: '@Url.Action("Data", "Employees")',
+            exportUrl: '@Url.Action("Export", "Employees")',
+            getUrl: '@Url.Action("Get", "Employees", new { id = 0 })'.replace(/\/0$/, ''),
+            detailUrl: '@Url.Action("Detail", "Employees", new { id = 0 })'.replace(/\/0$/, ''),
+            resetPortalUrl: '@Url.Action("ResetPortalPassword", "Employees", new { id = 0 })'.replace(/\/0$/, ''),
+            editId: @Json.Serialize((int?)ViewBag.EditId),
+            saveUrl: '@Url.Action("Save", "Employees")',
+            setActiveUrl: '@Url.Action("SetActive", "Employees", new { id = 0 })'.replace(/\/0$/, ''),
+            initialSearch: @Json.Serialize((string?)ViewBag.Search ?? "")
+        };
+    </script>
+    <script src="~/js/employees.js" asp-append-version="true"></script>
+}

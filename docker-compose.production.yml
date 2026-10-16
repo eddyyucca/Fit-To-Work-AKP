@@ -1,0 +1,69 @@
+
+# ============================================================
+# PRODUCTION - konek ke SQL Server existing (container "mssql2022"
+# di network "mssql_default"), dengan pengaturan production:
+#   - Kredensial & konfigurasi lewat file .env (tidak hardcode di sini)
+#   - restart: always (otomatis nyala lagi kalau server reboot / container crash)
+#   - Healthcheck supaya Docker tahu kalau aplikasi hang/tidak merespons
+#   - Log rotation (supaya log tidak memenuhi disk)
+#   - Batas resource CPU/memory
+#
+# CARA PAKAI:
+#   1. Copy .env.production.example -> .env, lalu isi nilainya
+#   2. docker compose -f docker-compose.production.yml up --build -d
+#   3. docker compose -f docker-compose.production.yml logs -f web
+# ============================================================
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fittoworkapp-web:${APP_VERSION:-latest}
+    container_name: fittowork-web
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=${DB_SERVER};Database=${DB_NAME};User Id=${DB_USER};Password=${DB_PASSWORD};TrustServerCertificate=True;"
+      HRIS_API_URL: "${HRIS_API_URL:-}"
+      HRIS_API_TOKEN: "${HRIS_API_TOKEN:-}"
+    ports:
+      # Hanya bisa diakses dari server ini sendiri (cloudflared). Dari LAN / internet wajib lewat Cloudflare Tunnel.
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      # Lampiran hasil pemeriksaan (PDF/foto) - disimpan di volume supaya tidak hilang saat rebuild container.
+      # Backup: docker run --rm -v fittowork-uploads:/data -v %cd%:/backup alpine tar czf /backup/uploads.tgz -C /data .
+      - fittowork-uploads:/app/App_Data/uploads
+      # Kunci enkripsi cookie (login & "Ingat saya di HP ini"). Tanpa volume ini, setiap rebuild container
+      # membuat kunci baru -> semua karyawan di HP harus input NIP lagi & admin ter-logout.
+      - fittowork-keys:/app/App_Data/keys
+    networks:
+      - appprod-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/Account/EmployeeLogin"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  fittowork-uploads:
+    name: fittowork-uploads
+  fittowork-keys:
+    name: fittowork-keys
+
+networks:
+  appprod-net:
+    external: true   # pakai network SQL Server "mssql2022" yang sudah ada, jangan bikin baru

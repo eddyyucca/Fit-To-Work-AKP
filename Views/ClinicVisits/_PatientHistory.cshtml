@@ -1,0 +1,111 @@
+@* Riwayat pasien di form kunjungan klinik (dimuat lewat AJAX setelah pasien dipilih). *@
+@model FitToWorkApp.Controllers.Admin.PatientHistoryViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@using FitToWorkApp.Services
+@{
+    var e = Model.Employee;
+    var lastVisit = Model.Visits.FirstOrDefault();
+    // Diagnosa yang berulang (>= 2x dalam 10 kunjungan terakhir) ditandai supaya mudah terlihat
+    var repeated = Model.Visits
+        .SelectMany(v => (v.DiagnosaText ?? "").Split(", ", StringSplitOptions.RemoveEmptyEntries))
+        .GroupBy(d => d).Where(g => g.Count() >= 2)
+        .Select(g => $"{g.Key} ({g.Count()}x)").ToList();
+}
+<div class="card shadow-sm mb-3 border-primary-subtle">
+    <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">🗂️ Riwayat Pasien</span>
+        <a class="small" asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@e.Id" target="_blank" rel="noopener">Rekam medis lengkap ↗</a>
+    </div>
+    <div class="card-body small">
+        <div class="mb-2">
+            <span class="fw-semibold">@Model.TotalVisits kunjungan</span>
+            @if (lastVisit is not null)
+            {
+                var daysAgo = (Model.Today - Clock.ToLocal(lastVisit.VisitAt).Date).Days;
+                <span class="text-muted">· terakhir @(daysAgo == 0 ? "hari ini" : daysAgo + " hari lalu")</span>
+            }
+        </div>
+
+        @if (repeated.Count > 0)
+        {
+            <div class="alert alert-warning py-1 px-2 mb-2">Diagnosa berulang: @string.Join(", ", repeated)</div>
+        }
+
+        @if (Model.OpenFollowUps.Count > 0)
+        {
+            <div class="alert alert-danger py-1 px-2 mb-2">
+                <div class="fw-semibold">Follow up pemkes belum selesai:</div>
+                @foreach (var f in Model.OpenFollowUps)
+                {
+                    <div>
+                        <a asp-controller="Checkups" asp-action="Detail" asp-route-id="@f.Id" target="_blank" rel="noopener">@f.FollowUpDate?.ToString("dd/MM/yyyy")</a>
+                        — @f.TemuanKeterangan
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Model.CanSeeCheckups && Model.LatestCheckup is { } lc)
+        {
+            var abnormalRows = CheckupDisplay.Abnormal(lc).ToList();
+            <div class="mb-2">
+                <span class="text-muted">Pemkes terakhir @Clock.ToLocal(lc.ExaminedAt).ToString("dd/MM/yyyy"):</span>
+                @if (lc.TotalSkor.HasValue)
+                {
+                    <span class="badge @RiskColors.BadgeClass(lc.RisikoColor)">Skor @lc.TotalSkor · @lc.RisikoLabel</span>
+                }
+                @if (abnormalRows.Count == 0)
+                {
+                    <span class="badge bg-success">normal</span>
+                }
+                @foreach (var a in abnormalRows)
+                {
+                    <span class="badge @CheckupLevels.BadgeClass(a.Level) fw-normal">@a.Label: @a.ValueText</span>
+                }
+            </div>
+        }
+
+        @if (Model.CanSeeDrugTests && Model.LatestDrugTest is { } dt)
+        {
+            <div class="mb-2">
+                <span class="text-muted">Tes urin/alkohol terakhir @Clock.ToLocal(dt.TestedAt).ToString("dd/MM/yyyy"):</span>
+                <span class="badge @TestResults.BadgeClass(dt.HasilAkhir)">@dt.HasilAkhir</span>
+            </div>
+        }
+    </div>
+
+    <ul class="list-group list-group-flush small" style="max-height:420px; overflow:auto;">
+        @foreach (var v in Model.Visits)
+        {
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between gap-2">
+                    <a class="fw-semibold text-decoration-none" asp-controller="ClinicVisits" asp-action="Detail" asp-route-id="@v.Id" target="_blank" rel="noopener">
+                        @Clock.ToLocal(v.VisitAt).ToString("dd/MM/yyyy HH:mm")
+                    </a>
+                    <span class="badge @RecommendationTypes.BadgeClass(v.Rekomendasi)">@v.RekomendasiLabel</span>
+                </div>
+                <div><span class="text-muted">Keluhan:</span> @v.Keluhan</div>
+                @if (!string.IsNullOrEmpty(v.DiagnosaText))
+                {
+                    <div><span class="text-muted">Diagnosa:</span> @v.DiagnosaText</div>
+                }
+                @if (!string.IsNullOrEmpty(v.Pemeriksaan))
+                {
+                    <div><span class="text-muted">Pemeriksaan:</span> @v.Pemeriksaan</div>
+                }
+                @if (v.Medicines.Count > 0)
+                {
+                    <div><span class="text-muted">Obat:</span> @string.Join(", ", v.Medicines.Select(m => $"{m.NamaSnapshot} {m.Qty} {m.SatuanSnapshot}"))</div>
+                }
+            </li>
+        }
+        @if (Model.Visits.Count == 0)
+        {
+            <li class="list-group-item text-muted">Belum pernah berkunjung ke klinik.</li>
+        }
+    </ul>
+    @if (Model.TotalVisits > Model.Visits.Count)
+    {
+        <div class="card-footer small text-muted">Menampilkan @Model.Visits.Count kunjungan terakhir dari @Model.TotalVisits.</div>
+    }
+</div>

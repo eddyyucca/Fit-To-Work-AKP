@@ -1,0 +1,124 @@
+@model List<Disease>
+@{
+    ViewData["Title"] = "Jenis Penyakit";
+    Layout = "_AdminLayout";
+    var kategoriOptions = (List<string>)ViewBag.KategoriOptions;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Master Jenis Penyakit</h4>
+        <div class="text-muted small">Dipilih sebagai diagnosa saat mencatat kunjungan klinik. Yang sudah dipakai cukup dinonaktifkan, tidak dihapus.</div>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#diseaseModal" data-mode="create">+ Tambah Jenis Penyakit</button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr>
+                    <th>Kode</th>
+                    <th>Nama Penyakit</th>
+                    <th>Kategori</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model)
+                {
+                    <tr class="@(d.IsActive ? "" : "text-muted")">
+                        <td class="text-nowrap">@d.Kode</td>
+                        <td class="fw-semibold">@d.Name</td>
+                        <td>@d.Kategori</td>
+                        <td>@(d.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#diseaseModal"
+                                    data-mode="edit" data-id="@d.Id" data-kode="@d.Kode" data-name="@d.Name" data-kategori="@d.Kategori"
+                                    data-active="@(d.IsActive ? "true" : "false")">Ubah</button>
+                            <form asp-controller="Diseases" asp-action="ToggleActive" asp-route-id="@d.Id" method="post" class="d-inline">
+                                <input type="hidden" name="activate" value="@(d.IsActive ? "false" : "true")" />
+                                <button type="submit" class="btn btn-sm @(d.IsActive ? "btn-outline-danger" : "btn-outline-success")">@(d.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="diseaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" asp-controller="Diseases" asp-action="Save" method="post">
+            <div class="modal-header">
+                <h5 class="modal-title" id="diseaseModalTitle">Tambah Jenis Penyakit</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Id" id="dId" value="0" />
+                <div class="row">
+                    <div class="col-4 mb-3">
+                        <label class="form-label" for="dKode">Kode</label>
+                        <input class="form-control" name="Kode" id="dKode" maxlength="20" placeholder="J06.9" />
+                        <div class="form-text">Opsional (ICD-10)</div>
+                    </div>
+                    <div class="col-8 mb-3">
+                        <label class="form-label" for="dName">Nama Penyakit</label>
+                        <input class="form-control" name="Name" id="dName" maxlength="150" required />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="dKategori">Kategori</label>
+                    <select class="form-select" name="Kategori" id="dKategori">
+                        <option value="">- Tanpa kategori -</option>
+                        @foreach (var k in kategoriOptions)
+                        {
+                            <option value="@k">@k</option>
+                        }
+                    </select>
+                    <div class="form-text">
+                        Pilihan diambil dari Master Data &rsaquo;
+                        <a asp-controller="DiseaseCategories" asp-action="Index">Kategori Penyakit</a>.
+                    </div>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" name="IsActive" id="dActive" value="true" checked />
+                    <input type="hidden" name="IsActive" value="false" />
+                    <label class="form-check-label" for="dActive">Aktif</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Nilai lama yang sudah dinonaktifkan di master tetap ditampilkan supaya tidak hilang saat disimpan
+        function setSelect(sel, value) {
+            sel.querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
+            if (value && ![...sel.options].some((o) => o.value === value)) {
+                const o = new Option(`${value} (nonaktif)`, value);
+                o.dataset.legacy = 'true';
+                sel.add(o);
+            }
+            sel.value = value;
+        }
+
+        document.getElementById('diseaseModal').addEventListener('show.bs.modal', (e) => {
+            const b = e.relatedTarget.dataset;
+            const isEdit = b.mode === 'edit';
+            document.getElementById('diseaseModalTitle').textContent = isEdit ? 'Ubah Jenis Penyakit' : 'Tambah Jenis Penyakit';
+            document.getElementById('dId').value = isEdit ? b.id : 0;
+            document.getElementById('dKode').value = isEdit ? (b.kode || '') : '';
+            document.getElementById('dName').value = isEdit ? (b.name || '') : '';
+            setSelect(document.getElementById('dKategori'), isEdit ? (b.kategori || '') : '');
+            document.getElementById('dActive').checked = isEdit ? b.active === 'true' : true;
+        });
+    </script>
+}

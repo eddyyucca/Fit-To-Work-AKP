@@ -1,0 +1,207 @@
+@model FitToWorkApp.Controllers.Admin.DrugTestFormViewModel
+@inject FitToWorkApp.Services.IMedicalFileStorage Storage
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Input Tes Urin & Alkohol";
+    Layout = "_AdminLayout";
+    var parameters = (List<string>)ViewBag.Parameters;
+}
+
+<style>
+    .res-toggle .btn { min-width: 5.5rem; }
+    .test-section.disabled { opacity: .45; pointer-events: none; }
+</style>
+
+<div class="mb-4">
+    <a asp-controller="DrugTests" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Tes Urin &amp; Alkohol</a>
+    <h4 class="mb-0 mt-1">Input Tes Urin &amp; Alkohol</h4>
+</div>
+
+<form asp-controller="DrugTests" asp-action="Create" method="post" id="drugForm" autocomplete="off" enctype="multipart/form-data">
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Karyawan <span class="text-muted small">(AKP atau mitra)</span></label>
+                            @{ ViewData["PickerIncludeMitra"] = true; }
+                            <partial name="_EmployeePicker" model="(Model.EmployeeId, Model.EmployeeLabel)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="TestedAt">Waktu Tes</label>
+                            <input asp-for="TestedAt" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" asp-for="Alasan">Alasan tes</label>
+                            <select asp-for="Alasan" class="form-select">
+                                @foreach (var r in DrugTestReasons.All)
+                                {
+                                    <option value="@r">@DrugTestReasons.Label(r)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end gap-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" asp-for="TesUrin" id="TesUrin" />
+                                <label class="form-check-label" for="TesUrin">Tes urin</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" asp-for="TesAlkohol" id="TesAlkohol" />
+                                <label class="form-check-label" for="TesAlkohol">Tes alkohol</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= Tes urin ================= -->
+            <div class="card shadow-sm mb-3 test-section" id="urinSection">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">🧪 Tes Urin</span>
+                    <span class="badge" id="urinSummary"></span>
+                </div>
+                <div class="card-body">
+                    @if (parameters.Count == 0)
+                    {
+                        <div class="text-danger small">Master Parameter Tes Urin masih kosong / nonaktif semua. Isi dulu di menu Master Data &gt; Parameter Tes Urin.</div>
+                    }
+                    <table class="table table-sm align-middle mb-0">
+                        <tbody>
+                            @for (var i = 0; i < Model.UrineItems.Count; i++)
+                            {
+                                var item = Model.UrineItems[i];
+                                var isPos = item.Hasil == TestResults.Positif;
+                                <tr>
+                                    <td>
+                                        @item.ParameterName
+                                        <input type="hidden" name="UrineItems[@i].ParameterName" value="@item.ParameterName" />
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm res-toggle" role="group">
+                                            <input type="radio" class="btn-check urin-res" name="UrineItems[@i].Hasil" id="@($"u{i}n")" value="Negatif" checked="@(!isPos)" />
+                                            <label class="btn btn-outline-success" for="@($"u{i}n")">Negatif</label>
+                                            <input type="radio" class="btn-check urin-res" name="UrineItems[@i].Hasil" id="@($"u{i}p")" value="Positif" checked="@isPos" />
+                                            <label class="btn btn-outline-danger" for="@($"u{i}p")">Positif</label>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ================= Tes alkohol ================= -->
+            <div class="card shadow-sm mb-3 test-section" id="alkoholSection">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">🍺 Tes Alkohol</span>
+                    <span class="badge" id="alkoholSummary"></span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label" asp-for="AlkoholKadar">Kadar dari alat</label>
+                            <input asp-for="AlkoholKadar" type="number" step="0.001" min="0" max="99" class="form-control" placeholder="mis. 0.000" />
+                            <div class="form-text">Positif jika &gt; @HealthRanges.Fmt(HealthRanges.AlkoholBatas) (lihat Acuan Nilai Pemkes).</div>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label d-block">Hasil</label>
+                            <div class="btn-group res-toggle" role="group">
+                                <input type="radio" class="btn-check" name="AlkoholHasil" id="aNeg" value="Negatif" checked="@(Model.AlkoholHasil != TestResults.Positif)" />
+                                <label class="btn btn-outline-success" for="aNeg">Negatif</label>
+                                <input type="radio" class="btn-check" name="AlkoholHasil" id="aPos" value="Positif" checked="@(Model.AlkoholHasil == TestResults.Positif)" />
+                                <label class="btn btn-outline-danger" for="aPos">Positif</label>
+                            </div>
+                            <div class="form-text">Kalau kadar diisi, hasil ditentukan otomatis dari batas.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <label class="form-label" asp-for="Catatan">Catatan</label>
+                    <textarea asp-for="Catatan" class="form-control mb-3" rows="2" maxlength="1000"
+                              placeholder="mis. Merek/nomor alat, tes ulang (konfirmasi), tindak lanjut"></textarea>
+                    <label class="form-label">📎 Upload hasil tes <span class="text-muted small">(opsional)</span></label>
+                    <input type="file" name="Files" class="form-control" multiple accept="@Storage.AcceptAttribute" />
+                    <div class="form-text">Foto strip tes / cetakan alat / hasil lab. PDF, JPG atau PNG, maks. @(Storage.MaxFileBytes / 1024 / 1024) MB per file.</div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Simpan Hasil Tes</button>
+                <a asp-controller="DrugTests" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-semibold">Petunjuk</div>
+                <div class="card-body small text-muted">
+                    <ul class="ps-3 mb-0">
+                        <li>Semua parameter urin default <b>Negatif</b>; ubah yang positif saja.</li>
+                        <li>Hasil urin positif jika minimal satu parameter positif.</li>
+                        <li>Hasil positif tampil merah di daftar &amp; rekam medis. Lakukan tes konfirmasi sesuai prosedur perusahaan.</li>
+                        <li>Parameter bisa ditambah/diubah di Master Data &gt; Parameter Tes Urin.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        window.HEALTH_RANGES = @Json.Serialize(HealthRanges.ToClientConfig());
+    </script>
+    <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const form = document.getElementById('drugForm');
+            const tesUrin = document.getElementById('TesUrin');
+            const tesAlkohol = document.getElementById('TesAlkohol');
+            const urinSection = document.getElementById('urinSection');
+            const alkoholSection = document.getElementById('alkoholSection');
+            const kadar = form.elements['AlkoholKadar'];
+            const batas = Number(window.HEALTH_RANGES.alkohol.batas);
+
+            const badge = (el, res) => {
+                el.className = 'badge ' + (res === 'Positif' ? 'bg-danger' : res === 'Negatif' ? 'bg-success' : 'bg-secondary');
+                el.textContent = res ? res.toUpperCase() : '';
+            };
+
+            function sync() {
+                urinSection.classList.toggle('disabled', !tesUrin.checked);
+                alkoholSection.classList.toggle('disabled', !tesAlkohol.checked);
+
+                const urinPos = [...form.querySelectorAll('.urin-res:checked')].some((r) => r.value === 'Positif');
+                badge(document.getElementById('urinSummary'), tesUrin.checked ? (urinPos ? 'Positif' : 'Negatif') : '');
+
+                // Kadar diisi -> hasil alkohol dipilih otomatis dari batas
+                const hasKadar = kadar.value !== '';
+                if (hasKadar) {
+                    const pos = Number(kadar.value) > batas;
+                    document.getElementById(pos ? 'aPos' : 'aNeg').checked = true;
+                }
+                form.querySelectorAll('input[name="AlkoholHasil"]').forEach((r) => r.disabled = hasKadar);
+                const alkRes = form.querySelector('input[name="AlkoholHasil"]:checked')?.value;
+                badge(document.getElementById('alkoholSummary'), tesAlkohol.checked ? alkRes : '');
+            }
+
+            form.addEventListener('change', sync);
+            kadar.addEventListener('input', sync);
+            sync();
+
+            form.addEventListener('submit', (e) => {
+                if (!form.elements['EmployeeId'].value) { e.preventDefault(); toastr.warning('Pilih karyawan terlebih dahulu.'); return; }
+                if (!tesUrin.checked && !tesAlkohol.checked) { e.preventDefault(); toastr.warning('Pilih minimal satu jenis tes.'); return; }
+                // Radio yang disabled tidak ikut terkirim; server menghitung hasil dari kadar
+                form.querySelectorAll('input[name="AlkoholHasil"]').forEach((r) => r.disabled = false);
+            });
+        })();
+    </script>
+}

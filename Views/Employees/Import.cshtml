@@ -1,0 +1,89 @@
+@{
+    ViewData["Title"] = "Import Data Karyawan";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Import Data Karyawan dari Excel</h4>
+    <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Kembali</a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <div asp-validation-summary="All" class="text-danger"></div>
+
+        <ol class="small text-muted mb-4">
+            <li>Unduh template Excel di bawah ini supaya format kolom sesuai.</li>
+            <li>Isi data karyawan (kolom <strong>NIP</strong>, <strong>Nama</strong>, dan <strong>Section</strong> wajib
+                diisi; <strong>Division</strong>, <strong>Department</strong>, <strong>Position</strong>,
+                <strong>Tanggal Lahir</strong> (dd/mm/yyyy) dan <strong>Jenis Kelamin</strong> (L/P) opsional).
+                Tanggal lahir dipakai karyawan untuk login <em>Riwayat Saya</em>; kalau dikosongkan saat update, nilai lama tetap dipakai.
+            </li>
+            <li>Kolom Division, Department, Section, dan Position sudah dilengkapi <strong>dropdown</strong> di Excel —
+                klik sel-nya lalu pilih dari daftar, tidak perlu mengetik manual (mengurangi risiko typo).</li>
+                <li>Daftar lengkap nilai yang valid juga bisa dilihat di sheet <strong>"Master Data"</strong> pada file
+                    template, atau di menu <strong>Data Organisasi</strong> (hanya data yang berstatus aktif yang muncul di
+                    dropdown).</li>
+                    <li>Kalau NIP sudah ada di sistem, datanya akan <strong>diperbarui</strong> (bukan dobel). Kalau NIP baru,
+                        akan <strong>ditambahkan</strong>.</li>
+                    <li>Setelah upload, muncul <strong>pratinjau</strong> dulu (belum disimpan). Kalau ada
+                        <strong>Jabatan, Division, atau Department</strong> yang belum ada di Data Organisasi, Anda bisa memilih:
+                        tambahkan sebagai data baru, perbaiki ke yang sudah ada, aktifkan lagi, atau kosongkan.
+                        Section tetap harus sesuai Data Organisasi. Baris yang gagal tidak ikut disimpan.</li>
+                    </ol>
+
+                    <a asp-controller="Employees" asp-action="DownloadTemplate" class="btn btn-outline-primary btn-sm mb-4">⬇️ Unduh
+                        Template Excel</a>
+
+                        <form id="importForm" asp-controller="Employees" asp-action="Import" method="post"
+                              enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label class="form-label">File Excel (.xlsx)</label>
+                                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required />
+                            </div>
+                            <button id="importSubmitBtn" type="submit" class="btn btn-primary">
+                                <span id="importSpinner" class="spinner-border spinner-border-sm me-1 d-none" role="status"
+                                      aria-hidden="true"></span>
+                                <span id="importBtnText">Lanjut ke Pratinjau</span>
+                            </button>
+                        </form>
+
+                        <div id="importLoadingOverlay" class="d-none mt-3">
+                            <div class="alert alert-info d-flex align-items-center mb-0">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
+                                <div>Sedang memproses file, mohon tunggu... Jangan tutup atau refresh halaman ini.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @section Scripts {
+                    <script>
+                        (function () {
+                            var form = document.getElementById('importForm');
+                            var btn = document.getElementById('importSubmitBtn');
+                            var spinner = document.getElementById('importSpinner');
+                            var btnText = document.getElementById('importBtnText');
+                            var overlay = document.getElementById('importLoadingOverlay');
+
+                            form.addEventListener('submit', function (e) {
+                                var fileInput = form.querySelector('input[type="file"]');
+                                if (!fileInput.value) {
+                                    return; // biarkan validasi HTML5 "required" yang menangani
+                                }
+
+                                // Cegah submit dobel kalau tombol diklik berkali-kali
+                                if (btn.dataset.submitting === 'true') {
+                                    e.preventDefault();
+                                    return;
+                                }
+                                btn.dataset.submitting = 'true';
+
+                                btn.disabled = true;
+                                spinner.classList.remove('d-none');
+                                btnText.textContent = 'Memproses...';
+                                overlay.classList.remove('d-none');
+                            });
+                        })();
+                    </script>
+                }

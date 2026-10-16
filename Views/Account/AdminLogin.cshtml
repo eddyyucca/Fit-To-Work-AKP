@@ -1,0 +1,40 @@
+@model AdminLoginViewModel
+@{
+    ViewData["Title"] = "Login Admin";
+    ViewData["AuthPage"] = true;
+}
+
+<div class="row justify-content-center">
+    <div class="col-sm-9 col-md-6 col-lg-4">
+        <partial name="_AuthLogo" model="@("Panel Admin")" />
+        <div class="card akp-auth-card">
+            <div class="card-body p-4">
+                <p class="text-center text-muted mb-4">Masuk untuk mengelola data AKP Sehat</p>
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+                <form asp-controller="Account" asp-action="AdminLogin" method="post">
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <div class="input-group mb-1">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input asp-for="Username" class="form-control" placeholder="Username" autofocus autocomplete="username" />
+                    </div>
+                    <span asp-validation-for="Username" class="text-danger small d-block mb-2"></span>
+                    <div class="input-group mb-1">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input asp-for="Password" class="form-control" placeholder="Password" autocomplete="current-password" />
+                    </div>
+                    <span asp-validation-for="Password" class="text-danger small d-block mb-3"></span>
+                    <button type="submit" class="btn btn-primary w-100">Masuk</button>
+                </form>
+            </div>
+        </div>
+        <p class="text-center small mt-3 mb-0">
+            Karyawan? <a asp-controller="Account" asp-action="EmployeeLogin">Fit To Work / Aktivitas Kebugaran di sini</a>
+        </p>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

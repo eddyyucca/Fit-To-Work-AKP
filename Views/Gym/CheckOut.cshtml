@@ -1,0 +1,139 @@
+@model GymAttendance
+@using FitToWorkApp.Services
+@inject IAppClock Clock
+@{
+    ViewData["Title"] = Model.Aktivitas + " berlangsung";
+    var mulai = Clock.ToLocal(Model.CreatedAt);
+    var batas = Clock.ToLocal(GymRules.DeadlineUtc(Model));
+    var error = ViewBag.Error as string;
+    var usesGps = Model.IsGps;
+    var location = (LocationUiModel)ViewBag.Location;
+    // Detik sejak mulai, dihitung di server supaya tidak bergantung jam HP karyawan
+    var elapsedSeconds = (long)Math.Max(0, (DateTime.UtcNow - Model.CreatedAt).TotalSeconds);
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+}
+
+<style>
+    .act-stat { border: 1px solid #dee2e6; border-radius: .75rem; padding: .6rem; height: 100%; background: #fff; }
+    .act-stat .v { font-size: 1.8rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .act-stat.big .v { font-size: 2.6rem; }
+</style>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-3 p-md-4 form-card-body text-center">
+                <div style="font-size:2.4rem" aria-hidden="true">@Model.Ikon</div>
+                <h4 class="mb-0">@Model.Aktivitas sedang berlangsung</h4>
+                <p class="text-muted small mb-3">@Model.NamaSnapshot · mulai @mulai.ToString("HH:mm")</p>
+
+                @if (error is not null)
+                {
+                    <div class="alert alert-danger text-start small">@error</div>
+                }
+
+                <div class="row g-2 mb-3">
+                    <div class="@(usesGps ? "col-12" : "col-6")">
+                        <div class="act-stat big">
+                            <div class="small text-muted">Waktu berjalan</div>
+                            <div class="v" id="actElapsed">-</div>
+                        </div>
+                    </div>
+                    @if (usesGps)
+                    {
+                        <div class="col-6">
+                            <div class="act-stat">
+                                <div class="small text-muted">Jarak</div>
+                                <div class="v text-primary" id="actDistance">0 m</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="act-stat">
+                                <div class="small text-muted">Pace</div>
+                                <div class="v" id="actPace">-</div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-6">
+                            <div class="act-stat">
+                                <div class="small text-muted">Mulai</div>
+                                <div class="v">@mulai.ToString("HH:mm")</div>
+                                @if (Model.BeratBadan is decimal bb)
+                                {
+                                    <div class="small text-muted">Berat @bb.ToString("0.0", inv) kg</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (usesGps)
+                {
+                    <div class="text-start">
+                        <div id="gpsStatus" class="alert alert-secondary py-2 small mb-2" role="status" aria-live="polite">Menyiapkan GPS…</div>
+                        <div id="wakeInfo" class="alert alert-info py-2 small mb-2">Jangan kunci layar selama merekam.</div>
+                        <div id="gapInfo" class="alert alert-warning py-2 small mb-2 d-none"></div>
+                        <div id="storageWarn" class="alert alert-warning py-2 small mb-2 d-none">
+                            Rekaman tidak bisa disimpan di HP (mode privat?). Jangan muat ulang / tutup halaman ini sampai selesai.
+                        </div>
+                    </div>
+                }
+
+                <p class="small text-muted mb-3">
+                    Tekan <strong>Selesai</strong> setelah berolahraga. Kalau belum diselesaikan sampai pukul
+                    <strong>@batas.ToString("HH:mm")</strong>@(batas.Date != mulai.Date ? " (" + batas.ToString("dd/MM") + ")" : ""),
+                    sesi ditutup otomatis dan dicatat <strong>"Tidak diselesaikan"</strong>@(usesGps ? " (durasi & jarak tidak dihitung)" : " (durasi tidak dihitung)").
+                </p>
+
+                <form asp-controller="Gym" asp-action="CheckOut" asp-route-id="@Model.Id" method="post" id="finishForm" class="text-start"
+                      data-location-guard="@(location.Mode == LocationUiModel.ModeOff ? null : "true")">
+                    <partial name="_LocationStatus" model="location" />
+                    <input type="hidden" name="track" id="trackInput" />
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-danger btn-lg" id="btnAskFinish">
+                            <i class="bi bi-stop-fill me-1"></i>Selesai
+                        </button>
+                        <div id="confirmPanel" class="border border-danger rounded p-3 d-none">
+                            <div class="fw-semibold mb-1">Selesaikan @Model.Aktivitas sekarang?</div>
+                            @if (usesGps)
+                            {
+                                <div class="small text-muted mb-2">Jarak terekam: <strong id="confirmDistance">0 m</strong>. Setelah selesai, rekaman tidak bisa dilanjutkan.</div>
+                            }
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-danger" id="btnFinish"><i class="bi bi-check2-circle me-1"></i>Ya, Selesai</button>
+                                <button type="button" class="btn btn-outline-secondary" id="btnCancelFinish">Lanjutkan @Model.Aktivitas</button>
+                            </div>
+                        </div>
+                        <a asp-controller="Menu" asp-action="Index" class="btn btn-outline-secondary @(usesGps ? "d-none" : "")">Kembali ke Menu</a>
+                    </div>
+                </form>
+                @if (usesGps)
+                {
+                    <p class="small text-muted mt-3 mb-0">
+                        Halaman ini harus tetap terbuka selama merekam. Kalau tertutup, buka lagi menu Aktivitas Kebugaran:
+                        titik yang sudah terekam di HP ini tetap tersimpan.
+                    </p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @if (location.Mode != LocationUiModel.ModeOff)
+    {
+        <script src="~/js/location-guard.js" asp-append-version="true"></script>
+    }
+    <script>
+        window.AKP_ACTIVITY = {
+            sessionId: @Model.Id,
+            elapsedSeconds: @elapsedSeconds,
+            usesGps: @(usesGps ? "true" : "false"),
+            maxSpeedKmh: @Json.Serialize(ViewBag.MaxSpeedKmh)
+        };
+    </script>
+    <script src="~/js/fitness-track.js" asp-append-version="true"></script>
+    <script src="~/js/activity-tracker.js" asp-append-version="true"></script>
+}

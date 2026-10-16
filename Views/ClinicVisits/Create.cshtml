@@ -1,0 +1,319 @@
+@model FitToWorkApp.Controllers.Admin.VisitFormViewModel
+@{
+    ViewData["Title"] = "Catat Kunjungan Klinik";
+    Layout = "_AdminLayout";
+    var diseases = (List<Disease>)ViewBag.Diseases;
+    var medicines = (List<Medicine>)ViewBag.MedicineList;
+    var rows = Model.Medicines.Count > 0 ? Model.Medicines : new List<FitToWorkApp.Controllers.Admin.VisitMedicineRow> { new() };
+}
+
+<style>
+    .dx-chip { display: inline-flex; align-items: center; gap: .35rem; }
+    .dx-chip button { border: 0; background: none; line-height: 1; padding: 0 0 0 .15rem; color: inherit; }
+    .rek-option input { display: none; }
+    .rek-option span { cursor: pointer; }
+    .rek-option input:checked + span { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+</style>
+
+<div class="mb-4">
+    <a asp-controller="ClinicVisits" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Kunjungan Klinik</a>
+    <h4 class="mb-0 mt-1">Catat Kunjungan Klinik</h4>
+</div>
+
+<form asp-controller="ClinicVisits" asp-action="Create" method="post" id="visitForm" autocomplete="off">
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Karyawan / Pasien</label>
+                            @{ ViewData["PickerIncludeMitra"] = true; }
+                            <partial name="_EmployeePicker" model="(Model.EmployeeId, Model.EmployeeLabel)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="VisitAt">Waktu Kunjungan</label>
+                            <input asp-for="VisitAt" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Keluhan &amp; Diagnosa</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="Keluhan">Keluhan</label>
+                        <textarea asp-for="Keluhan" class="form-control" rows="2" maxlength="1000" placeholder="mis. Demam 2 hari, batuk, pusing"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="Pemeriksaan">Hasil Pemeriksaan <span class="text-muted small">(opsional)</span></label>
+                        <textarea asp-for="Pemeriksaan" class="form-control" rows="2" maxlength="1000" placeholder="mis. TD 130/85, suhu 38,2°C, faring hiperemis"></textarea>
+                    </div>
+                    <label class="form-label">Jenis Penyakit / Diagnosa</label>
+                    <div class="input-group">
+                        <select class="form-select" id="dxSelect">
+                            <option value="">— pilih jenis penyakit —</option>
+                            @foreach (var grp in diseases.GroupBy(d => d.Kategori ?? "Lainnya"))
+                            {
+                                <optgroup label="@grp.Key">
+                                    @foreach (var d in grp)
+                                    {
+                                        <option value="@d.Id">@d.DisplayName</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                        <button type="button" class="btn btn-outline-primary" id="dxAdd">Tambah</button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-2" id="dxChips">
+                        @foreach (var id in Model.DiseaseIds)
+                        {
+                            var d = diseases.FirstOrDefault(x => x.Id == id);
+                            if (d is null) continue;
+                            <span class="badge text-bg-primary dx-chip" data-id="@d.Id">@d.DisplayName<input type="hidden" name="DiseaseIds" value="@d.Id" /><button type="button" aria-label="Hapus">×</button></span>
+                        }
+                    </div>
+                    @if (diseases.Count == 0)
+                    {
+                        <div class="text-danger small mt-2">Master jenis penyakit masih kosong. Isi dulu di menu Jenis Penyakit.</div>
+                    }
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Obat yang Diberikan</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="medAdd">+ Baris obat</button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0" id="medTable">
+                            <thead>
+                                <tr class="small text-muted">
+                                    <th style="min-width:14rem">Obat</th>
+                                    <th style="width:7rem">Jumlah</th>
+                                    <th>Aturan pakai</th>
+                                    <th style="width:2.5rem"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in rows)
+                                {
+                                    <tr class="med-row">
+                                        <td>
+                                            <select class="form-select form-select-sm med-id" data-field="MedicineId">
+                                                <option value="">— tidak ada / pilih obat —</option>
+                                                @foreach (var m in medicines)
+                                                {
+                                                    <option value="@m.Id" data-stok="@m.Stok" data-satuan="@m.Satuan" selected="@(row.MedicineId == m.Id)" disabled="@(m.Stok <= 0)">
+                                                        @m.Name (stok @m.Stok @m.Satuan)
+                                                    </option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" min="1" max="1000" class="form-control med-qty" data-field="Qty" value="@row.Qty" />
+                                                <span class="input-group-text med-satuan"></span>
+                                            </div>
+                                        </td>
+                                        <td><input class="form-control form-control-sm" data-field="AturanPakai" maxlength="100" value="@row.AturanPakai" placeholder="mis. 3x1 sesudah makan" list="aturanList" /></td>
+                                        <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger med-del" aria-label="Hapus baris">×</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <datalist id="aturanList">
+                            <option value="3x1 sesudah makan"></option>
+                            <option value="2x1 sesudah makan"></option>
+                            <option value="1x1 sesudah makan"></option>
+                            <option value="3x1 sebelum makan"></option>
+                            <option value="Bila perlu"></option>
+                            <option value="Oleskan 2x sehari"></option>
+                        </datalist>
+                    </div>
+                    <div class="form-text">Stok berkurang otomatis saat disimpan. Obat dengan stok 0 tidak bisa dipilih.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Riwayat pasien: diisi otomatis setelah pasien dipilih (Admin/ClinicVisits/History) -->
+            <div id="patientHistory" data-url="@Url.Action("History", "ClinicVisits")"></div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Rekomendasi Dokter / Medic</div>
+                <div class="card-body">
+                    <div class="d-grid gap-2 mb-3">
+                        @foreach (var t in RecommendationTypes.All)
+                        {
+                            <label class="rek-option">
+                                <input type="radio" name="Rekomendasi" value="@t" checked="@(Model.Rekomendasi == t)" />
+                                <span class="badge @RecommendationTypes.BadgeClass(t) w-100 py-2 fs-6">@RecommendationTypes.Label(t)</span>
+                            </label>
+                        }
+                    </div>
+                    <div class="mb-3" id="hariGroup">
+                        <label class="form-label mb-1">Lama istirahat</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" asp-for="IstirahatDari">Dari tanggal</label>
+                                <input asp-for="IstirahatDari" type="date" class="form-control" asp-format="{0:yyyy-MM-dd}" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" asp-for="IstirahatSampai">Sampai tanggal</label>
+                                <input asp-for="IstirahatSampai" type="date" class="form-control" asp-format="{0:yyyy-MM-dd}" />
+                            </div>
+                        </div>
+                        <div class="form-text" id="hariInfo"></div>
+                    </div>
+                    <label class="form-label" asp-for="CatatanRekomendasi">Catatan</label>
+                    <textarea asp-for="CatatanRekomendasi" class="form-control" rows="4" maxlength="1000"
+                              placeholder="mis. Banyak minum air, kontrol jika demam > 3 hari / rujuk ke RS ..."></textarea>
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg">Simpan Kunjungan</button>
+                <a asp-controller="ClinicVisits" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            // Kalender Flatpickr (datepicker.js); fallback ke input biasa kalau CDN gagal dimuat
+            const setDate = window.akpSetDate || ((el, v) => { el.value = v || ''; });
+            const form = document.getElementById('visitForm');
+            const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+            // ---------- Diagnosa (chips) ----------
+            const dxSelect = document.getElementById('dxSelect');
+            const dxChips = document.getElementById('dxChips');
+            const addDx = () => {
+                const id = dxSelect.value;
+                if (!id || dxChips.querySelector(`[data-id="${id}"]`)) { dxSelect.value = ''; return; }
+                const label = dxSelect.options[dxSelect.selectedIndex].text;
+                dxChips.insertAdjacentHTML('beforeend',
+                    `<span class="badge text-bg-primary dx-chip" data-id="${esc(id)}">${esc(label)}<input type="hidden" name="DiseaseIds" value="${esc(id)}" /><button type="button" aria-label="Hapus">×</button></span>`);
+                dxSelect.value = '';
+            };
+            document.getElementById('dxAdd').addEventListener('click', addDx);
+            dxSelect.addEventListener('change', addDx);
+            dxChips.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') e.target.closest('.dx-chip').remove(); });
+
+            // ---------- Obat ----------
+            const tbody = document.querySelector('#medTable tbody');
+            const template = tbody.querySelector('.med-row').cloneNode(true);
+
+            const refreshRow = (tr) => {
+                const opt = tr.querySelector('.med-id').selectedOptions[0];
+                const qty = tr.querySelector('.med-qty');
+                tr.querySelector('.med-satuan').textContent = opt && opt.value ? opt.dataset.satuan : '';
+                qty.max = opt && opt.value ? opt.dataset.stok : 1000;
+                const over = opt && opt.value && Number(qty.value) > Number(opt.dataset.stok);
+                qty.classList.toggle('is-invalid', !!over);
+                qty.title = over ? `Stok hanya ${opt.dataset.stok}` : '';
+            };
+
+            document.getElementById('medAdd').addEventListener('click', () => {
+                const tr = template.cloneNode(true);
+                tr.querySelectorAll('input').forEach((i) => { i.value = ''; i.classList.remove('is-invalid'); });
+                tr.querySelector('select').value = '';
+                tbody.appendChild(tr);
+                refreshRow(tr);
+            });
+            tbody.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('med-del')) return;
+                const tr = e.target.closest('tr');
+                if (tbody.rows.length > 1) tr.remove();
+                else { tr.querySelectorAll('input').forEach((i) => i.value = ''); tr.querySelector('select').value = ''; refreshRow(tr); }
+            });
+            tbody.addEventListener('change', (e) => {
+                const tr = e.target.closest('tr');
+                if (e.target.classList.contains('med-id') && e.target.value && !tr.querySelector('.med-qty').value)
+                    tr.querySelector('.med-qty').value = 1;
+                refreshRow(tr);
+            });
+            tbody.addEventListener('input', (e) => refreshRow(e.target.closest('tr')));
+            tbody.querySelectorAll('tr').forEach(refreshRow);
+
+            // ---------- Riwayat pasien ----------
+            const historyBox = document.getElementById('patientHistory');
+            let historySeq = 0;
+            const loadHistory = async (employeeId) => {
+                const my = ++historySeq;
+                if (!employeeId) { historyBox.innerHTML = ''; return; }
+                historyBox.innerHTML = '<div class="card shadow-sm mb-3"><div class="card-body small text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Memuat riwayat pasien…</div></div>';
+                try {
+                    const res = await fetch(`${historyBox.dataset.url}?employeeId=${encodeURIComponent(employeeId)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                    if (!res.ok) throw new Error(res.status);
+                    const html = await res.text();
+                    if (my === historySeq) historyBox.innerHTML = html;
+                } catch {
+                    if (my === historySeq) historyBox.innerHTML = '<div class="alert alert-warning small">Riwayat pasien gagal dimuat.</div>';
+                }
+            };
+            const picker = form.querySelector('.employee-picker');
+            picker.addEventListener('employee:selected', (e) => loadHistory(e.detail ? e.detail.id : null));
+            if (form.elements['EmployeeId'].value) loadHistory(form.elements['EmployeeId'].value);
+
+            // ---------- Rekomendasi & tanggal istirahat ----------
+            const hariGroup = document.getElementById('hariGroup');
+            const hariInfo = document.getElementById('hariInfo');
+            const dari = form.elements['IstirahatDari'];
+            const sampai = form.elements['IstirahatSampai'];
+            const visitDate = () => (form.elements['VisitAt'].value || '').substring(0, 10);
+            const parse = (v) => v ? new Date(v + 'T00:00:00') : null;
+
+            const syncHari = () => {
+                const d = parse(dari.value), s = parse(sampai.value);
+                if (!d || !s) { hariInfo.textContent = 'Isi tanggal mulai & selesai istirahat.'; hariInfo.className = 'form-text'; return; }
+                const n = Math.round((s - d) / 86400000) + 1;
+                hariInfo.textContent = n > 0 ? `Total ${n} hari istirahat` : 'Tanggal selesai tidak boleh sebelum tanggal mulai';
+                hariInfo.className = n > 0 && n <= @FitToWorkApp.Controllers.Admin.ClinicVisitsController.MaxHariIstirahat ? 'form-text fw-semibold' : 'form-text text-danger';
+            };
+            const syncRek = () => {
+                const v = form.querySelector('input[name="Rekomendasi"]:checked')?.value;
+                hariGroup.classList.toggle('d-none', v !== 'Istirahat');
+                if (v === 'Istirahat') {
+                    // Default: istirahat mulai hari kunjungan, 1 hari
+                    if (!dari.value && visitDate()) setDate(dari, visitDate());
+                    if (!sampai.value && dari.value) setDate(sampai, dari.value);
+                    syncHari();
+                }
+            };
+            form.querySelectorAll('input[name="Rekomendasi"]').forEach((r) => r.addEventListener('change', syncRek));
+            dari.addEventListener('change', () => {
+                // Tanggal selesai tidak boleh lebih awal dari tanggal mulai
+                if (dari.value && (!sampai.value || sampai.value < dari.value)) setDate(sampai, dari.value);
+                syncHari();
+            });
+            sampai.addEventListener('change', syncHari);
+            syncRek();
+
+            // ---------- Submit: beri nama field obat berurutan (Medicines[0].MedicineId, ...) ----------
+            form.addEventListener('submit', (e) => {
+                if (!form.elements['EmployeeId'].value) { e.preventDefault(); toastr.warning('Pilih karyawan terlebih dahulu.'); return; }
+                if (!dxChips.querySelector('.dx-chip')) { e.preventDefault(); toastr.warning('Pilih minimal satu jenis penyakit / diagnosa.'); return; }
+                if (tbody.querySelector('.is-invalid')) { e.preventDefault(); toastr.warning('Jumlah obat melebihi stok.'); return; }
+                if (form.querySelector('input[name="Rekomendasi"]:checked')?.value === 'Istirahat' && (!dari.value || !sampai.value || sampai.value < dari.value)) {
+                    e.preventDefault(); toastr.warning('Isi tanggal istirahat dengan benar.'); return;
+                }
+                let i = 0;
+                tbody.querySelectorAll('tr').forEach((tr) => {
+                    const hasMed = tr.querySelector('.med-id').value;
+                    tr.querySelectorAll('[data-field]').forEach((el) => {
+                        if (hasMed) el.name = `Medicines[${i}].${el.dataset.field}`; else el.removeAttribute('name');
+                    });
+                    if (hasMed) i++;
+                });
+            });
+        })();
+    </script>
+}

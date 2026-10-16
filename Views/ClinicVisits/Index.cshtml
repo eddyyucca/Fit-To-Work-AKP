@@ -1,0 +1,88 @@
+@{
+    ViewData["Title"] = "Kunjungan Klinik";
+    Layout = "_AdminLayout";
+    var departments = (List<string>)ViewBag.Departments;
+}
+
+<style>
+    #visitTable td { vertical-align: middle; }
+    .dataTables_processing { background: rgba(255,255,255,.85) !important; border: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Kunjungan Klinik</h4>
+        <div class="text-muted small">Keluhan, diagnosa, obat &amp; rekomendasi per kunjungan.</div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="small text-muted me-2" id="summary">&nbsp;</div>
+        <button type="button" class="btn btn-success btn-sm" id="btnExportExcel">📥 Download Excel</button>
+        <a class="btn btn-primary btn-sm" asp-controller="ClinicVisits" asp-action="Create">+ Catat Kunjungan</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body pb-0">
+        <form id="filter" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fFrom">Dari Tanggal</label>
+                <input type="date" id="fFrom" name="from" class="form-control form-control-sm" value="@ViewBag.DefaultFrom" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fTo">Sampai Tanggal</label>
+                <input type="date" id="fTo" name="to" class="form-control form-control-sm" value="@ViewBag.DefaultTo" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="fDept">Department</label>
+                <select id="fDept" name="department" class="form-select form-select-sm">
+                    <option value="">Semua Department</option>
+                    @foreach (var d in departments)
+                    {
+                        <option value="@d">@d</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="fStatus">Rekomendasi</label>
+                <select id="fStatus" name="status" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    @foreach (var t in RecommendationTypes.All)
+                    {
+                        <option value="@t">@RecommendationTypes.Label(t)</option>
+                    }
+                    <option value="batal">Dibatalkan</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table mb-0 w-100" id="visitTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>Waktu</th>
+                        <th>NIP</th>
+                        <th>Nama</th>
+                        <th>Department</th>
+                        <th>Keluhan</th>
+                        <th>Diagnosa</th>
+                        <th>Rekomendasi</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.FTW_VISIT = {
+            dataUrl: '@Url.Action("Data", "ClinicVisits")',
+            exportUrl: '@Url.Action("Export", "ClinicVisits")',
+            detailUrl: '@Url.Action("Detail", "ClinicVisits", new { id = 0 })'.replace(/\/0$/, '/'),
+            recordUrl: '@Url.Action("Employee", "MedicalRecord", new { id = 0 })'.replace(/\/0$/, '/')
+        };
+    </script>
+    <script src="~/js/clinic-visits.js" asp-append-version="true"></script>
+}

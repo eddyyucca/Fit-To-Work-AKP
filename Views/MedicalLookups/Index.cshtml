@@ -1,0 +1,122 @@
+@model FitToWorkApp.Controllers.Admin.MedicalLookupPageViewModel
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "_AdminLayout";
+    var nextOrder = (Model.Items.Count == 0 ? 0 : Model.Items.Where(i => i.SortOrder < 900).Select(i => i.SortOrder).DefaultIfEmpty(0).Max()) + 10;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Master @Model.Title</h4>
+        <div class="text-muted small">@Model.Description</div>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#lookupModal" data-mode="create">+ Tambah @Model.Title</button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" data-order='[[0,"asc"]]'>
+            <thead class="table-light">
+                <tr>
+                    <th style="width:90px">Urutan</th>
+                    <th>Nama</th>
+                    <th class="text-end">Dipakai</th>
+                    <th>Status</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in Model.Items)
+                {
+                    <tr class="@(i.IsActive ? "" : "text-muted")">
+                        <td>@i.SortOrder</td>
+                        <td class="fw-semibold">@i.Name</td>
+                        <td class="text-end" data-order="@i.UsageCount">
+                            @if (i.UsageCount > 0)
+                            {
+                                <a asp-controller="@Model.UsageController" asp-action="Index">@i.UsageCount @Model.UsageLabel</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>@(i.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#lookupModal"
+                                    data-mode="edit" data-id="@i.Id" data-name="@i.Name" data-order="@i.SortOrder" data-usage="@i.UsageCount"
+                                    data-active="@(i.IsActive ? "true" : "false")">Ubah</button>
+                            <form asp-controller="@Model.Controller" asp-action="ToggleActive" asp-route-id="@i.Id" method="post" class="d-inline">
+                                <input type="hidden" name="activate" value="@(i.IsActive ? "false" : "true")" />
+                                <button type="submit" class="btn btn-sm @(i.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(i.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                            </form>
+                            @if (i.UsageCount == 0)
+                            {
+                                <form asp-controller="@Model.Controller" asp-action="Delete" asp-route-id="@i.Id" method="post" class="d-inline"
+                                      data-confirm="Hapus @Model.ItemLabel '@i.Name'?">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        Yang <strong>nonaktif</strong> tidak muncul lagi di dropdown, tapi data lama yang memakainya tetap aman.
+        Yang masih dipakai tidak bisa dihapus.
+    </div>
+</div>
+
+<div class="modal fade" id="lookupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" asp-controller="@Model.Controller" asp-action="Save" method="post">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lookupModalTitle">Tambah @Model.Title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Id" id="lId" value="0" />
+                <div class="row">
+                    <div class="col-8 mb-3">
+                        <label class="form-label" for="lName">Nama @Model.ItemLabel</label>
+                        <input class="form-control" name="Name" id="lName" maxlength="@Model.MaxLength" required placeholder="@Model.Placeholder" />
+                    </div>
+                    <div class="col-4 mb-3">
+                        <label class="form-label" for="lOrder">Urutan</label>
+                        <input class="form-control" type="number" min="0" max="9999" name="SortOrder" id="lOrder" value="@nextOrder" />
+                    </div>
+                </div>
+                <div class="alert alert-info py-2 small d-none" id="lUsageInfo"></div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" name="IsActive" id="lActive" value="true" checked />
+                    <input type="hidden" name="IsActive" value="false" />
+                    <label class="form-check-label" for="lActive">Aktif (muncul di dropdown)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('lookupModal').addEventListener('show.bs.modal', (e) => {
+            const b = e.relatedTarget.dataset;
+            const isEdit = b.mode === 'edit';
+            const usage = Number(b.usage || 0);
+            document.getElementById('lookupModalTitle').textContent = (isEdit ? 'Ubah ' : 'Tambah ') + @Json.Serialize(Model.Title);
+            document.getElementById('lId').value = isEdit ? b.id : 0;
+            document.getElementById('lName').value = isEdit ? (b.name || '') : '';
+            document.getElementById('lOrder').value = isEdit ? (b.order || 0) : @nextOrder;
+            document.getElementById('lActive').checked = isEdit ? b.active === 'true' : true;
+            const info = document.getElementById('lUsageInfo');
+            info.classList.toggle('d-none', !(isEdit && usage > 0));
+            info.textContent = `Dipakai ${usage} ${@Json.Serialize(Model.UsageLabel)}. Kalau nama diganti, semuanya ikut berganti.`;
+        });
+    </script>
+}

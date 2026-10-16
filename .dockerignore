@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.git/
+**/.gitignore
+**/*.user
+**/node_modules/
+README.md
+**/App_Data/

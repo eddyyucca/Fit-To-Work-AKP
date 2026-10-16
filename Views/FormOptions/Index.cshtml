@@ -1,0 +1,163 @@
+@model IEnumerable<FormOption>
+@{
+    ViewData["Title"] = "Master Data Form";
+    Layout = "_AdminLayout";
+    string activeGroup = ViewBag.ActiveGroup;
+    string[] groups = ViewBag.Groups;
+    Dictionary<string, string> labels = ViewBag.GroupLabels;
+    var optionsList = Model.ToList();
+    var activeLabel = labels.ContainsKey(activeGroup) ? labels[activeGroup] : activeGroup;
+}
+
+<h4 class="mb-1">Master Data Form Fit To Work</h4>
+<p class="text-muted small mb-4">
+    Kelola pilihan jawaban (radio/checkbox/dropdown) yang tampil di form pengisian karyawan.
+    Perubahan di sini langsung berlaku tanpa perlu deploy ulang aplikasi.
+</p>
+
+<ul class="nav nav-tabs mb-3">
+    @foreach (var g in groups)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(g == activeGroup ? "active fw-bold" : "")" asp-controller="FormOptions" asp-action="Index"
+               asp-route-group="@g">
+                @(labels.ContainsKey(g) ? labels[g] : g)
+            </a>
+        </li>
+    }
+</ul>
+
+<div class="d-flex justify-content-end mb-3">
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addOptionModal">
+        + Tambah Pilihan di "@activeLabel"
+    </button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" id="formOptionsTable">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:80px;">Urutan</th>
+                    <th>Teks Pilihan</th>
+                    <th style="width:100px;">Status</th>
+                    <th class="text-end" style="width:260px;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                @foreach (var o in optionsList)
+                {
+                    <tr>
+                        <td>@o.SortOrder</td>
+                        <td>@o.OptionValue</td>
+                        <td>
+                            @if (o.IsActive)
+                            {
+                                <span class="badge bg-success">Aktif</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Nonaktif</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                    data-bs-target="#editOptionModal-@o.Id">Edit</button>
+                            <form asp-controller="FormOptions" asp-action="ToggleActive" asp-route-id="@o.Id" method="post"
+                                  class="d-inline">
+                                <input type="hidden" name="activate" value="@(!o.IsActive)" />
+                                <input type="hidden" name="group" value="@activeGroup" />
+                                <button type="submit"
+                                        class="btn btn-sm @(o.IsActive ? "btn-outline-warning" : "btn-outline-success")">
+                                    @(o.IsActive ? "Nonaktifkan" : "Aktifkan")
+                                </button>
+                            </form>
+                            <form asp-controller="FormOptions" asp-action="Delete" asp-route-id="@o.Id" method="post"
+                                  class="d-inline"
+                                  data-confirm="Hapus pilihan ini? Data histori yang sudah pakai teks ini tidak akan berubah." data-confirm-ok="Ya, Hapus">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Tambah Pilihan -->
+<div class="modal fade" id="addOptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-controller="FormOptions" asp-action="Create" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tambah Pilihan — @activeLabel</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="GroupKey" value="@activeGroup" />
+                    <div class="mb-3">
+                        <label class="form-label">Teks Pilihan</label>
+                        <textarea name="OptionValue" class="form-control" rows="2" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Urutan Tampil</label>
+                        <input type="number" name="SortOrder" class="form-control" style="max-width:150px;" value="0" />
+                        <div class="form-text">Angka lebih kecil tampil lebih dulu.</div>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="IsActive" class="form-check-input" value="true" checked
+                               id="addOptionActive" />
+                        <input type="hidden" name="IsActive" value="false" />
+                        <label class="form-check-label" for="addOptionActive">Aktif (tampil di form karyawan)</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Edit Pilihan (satu per baris) -->
+@foreach (var o in optionsList)
+{
+    <div class="modal fade" id="editOptionModal-@o.Id" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form asp-controller="FormOptions" asp-action="Edit" asp-route-id="@o.Id" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Pilihan</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="GroupKey" value="@o.GroupKey" />
+                        <div class="mb-3">
+                            <label class="form-label">Teks Pilihan</label>
+                            <textarea name="OptionValue" class="form-control" rows="2" required>@o.OptionValue</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Urutan Tampil</label>
+                            <input type="number" name="SortOrder" class="form-control" style="max-width:150px;"
+                                   value="@o.SortOrder" />
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" name="IsActive" class="form-check-input" value="true"
+                                   checked="@o.IsActive" id="editOptionActive-@o.Id" />
+                            <input type="hidden" name="IsActive" value="false" />
+                            <label class="form-check-label" for="editOptionActive-@o.Id">Aktif (tampil di form
+                                karyawan)</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-primary">Simpan</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }

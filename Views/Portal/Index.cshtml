@@ -1,0 +1,241 @@
+@model Employee
+@inject FitToWorkApp.Services.IAppClock Clock
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Riwayat Saya";
+    var checkups = (List<HealthCheckup>)ViewBag.Checkups;
+    var visits = (List<ClinicVisit>)ViewBag.Visits;
+    var ftw = (List<FitToWorkSubmission>)ViewBag.Ftw;
+    var gym = (List<GymAttendance>)ViewBag.Gym;
+    var latest = checkups.FirstOrDefault();
+    var checkupFiles = (Dictionary<int, List<MedicalAttachment>>)ViewBag.CheckupAttachments;
+    AttachmentListViewModel? FilesFor(HealthCheckup c) => checkupFiles.TryGetValue(c.Id, out var list) && list.Count > 0
+        ? new AttachmentListViewModel { EntityType = AttachmentEntityTypes.Checkup, EntityId = c.Id, Items = list, PortalMode = true }
+        : null;
+}
+
+<style>
+    .portal-tabs .nav-link { white-space: nowrap; }
+    .portal-tabs { flex-wrap: nowrap; overflow-x: auto; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Riwayat Saya</h4>
+        <div class="text-muted small">@Model.Nama · NIP @Model.NIP · @Model.DepartmentName</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Portal" asp-action="ChangePassword" class="btn btn-outline-secondary btn-sm"><i class="bi bi-key me-1"></i>Ganti Password</a>
+        <form asp-controller="Portal" asp-action="Logout" method="post" id="portalLogout">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Keluar</button>
+        </form>
+    </div>
+</div>
+
+@if (TempData["PortalMessage"] is string portalMessage)
+{
+    <div class="alert alert-success alert-dismissible fade show py-2 small" role="alert">
+        <i class="bi bi-check-circle me-1"></i>@portalMessage
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Tutup"></button>
+    </div>
+}
+
+<ul class="nav nav-tabs portal-tabs mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabKesehatan" type="button">🩺 Kesehatan</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabKlinik" type="button">💊 Klinik (@visits.Count)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabFtw" type="button">🛡️ Fit To Work</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGym" type="button">🏃 Aktivitas</button></li>
+</ul>
+
+<div class="tab-content">
+    <!-- Pemeriksaan kesehatan -->
+    <div class="tab-pane fade show active" id="tabKesehatan" role="tabpanel">
+        @if (latest is null)
+        {
+            <div class="alert alert-light border">Belum ada hasil pemeriksaan kesehatan.</div>
+        }
+        else
+        {
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Pemeriksaan terakhir · @Clock.ToLocal(latest.ExaminedAt).ToString("dd/MM/yyyy")</div>
+                <div class="card-body">
+                    <partial name="_CheckupValues" model="latest" />
+                    <div class="small text-muted mt-2">Penanda warna hanya acuan umum, bukan diagnosis. Konsultasikan hasil Anda dengan medic / dokter.</div>
+                </div>
+            </div>
+            @if (FilesFor(latest) is { } latestFiles)
+            {
+                <partial name="_Attachments" model="latestFiles" />
+            }
+
+            @if (checkups.Count > 1)
+            {
+                <h6 class="mt-4">Riwayat pemeriksaan</h6>
+                <div class="accordion" id="accCheckup">
+                    @foreach (var c in checkups.Skip(1))
+                    {
+                        var abnormal = CheckupDisplay.AbnormalCount(c);
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c@(c.Id)">
+                                    @Clock.ToLocal(c.ExaminedAt).ToString("dd/MM/yyyy")
+                                    @if (!string.IsNullOrEmpty(c.RisikoLabel))
+                                    {
+                                        <span class="badge @RiskColors.BadgeClass(c.RisikoColor) ms-2">@c.RisikoLabel</span>
+                                    }
+                                    @if (abnormal > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-2">@abnormal perlu perhatian</span>
+                                    }
+                                </button>
+                            </h2>
+                            <div id="c@(c.Id)" class="accordion-collapse collapse" data-bs-parent="#accCheckup">
+                                <div class="accordion-body">
+                                    <partial name="_CheckupValues" model="c" />
+                                    @if (FilesFor(c) is { } files)
+                                    {
+                                        <div class="mt-3"><partial name="_Attachments" model="files" /></div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Kunjungan klinik -->
+    <div class="tab-pane fade" id="tabKlinik" role="tabpanel">
+        @if (visits.Count == 0)
+        {
+            <div class="alert alert-light border">Belum ada kunjungan klinik.</div>
+        }
+        @foreach (var v in visits)
+        {
+            <partial name="_VisitCard" model="v" />
+        }
+    </div>
+
+    <!-- Fit To Work -->
+    <div class="tab-pane fade" id="tabFtw" role="tabpanel">
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead class="table-light small"><tr><th>Tanggal</th><th>Jadwal</th><th>Jam tidur</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in ftw)
+                        {
+                            var isFit = s.KesiapanKerja.StartsWith("YA", StringComparison.OrdinalIgnoreCase);
+                            <tr>
+                                <td class="text-nowrap">@Clock.ToLocal(s.CreatedAt).ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="small">@s.JadwalKerja</td>
+                                <td class="small">@s.JamTidur</td>
+                                <td><span class="badge @(isFit ? "bg-success" : "bg-danger")">@(isFit ? "FIT" : "TIDAK FIT")</span></td>
+                            </tr>
+                        }
+                        @if (ftw.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-muted">Belum ada pengisian.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer small text-muted">Menampilkan maksimal 60 pengisian terakhir.</div>
+        </div>
+    </div>
+
+    <!-- Aktivitas Kebugaran -->
+    <div class="tab-pane fade" id="tabGym" role="tabpanel">
+        @{
+            var bulanIni = new DateTime(Clock.Today.Year, Clock.Today.Month, 1);
+            var gymBulanIni = gym.Where(g => Clock.ToLocal(g.CreatedAt) >= bulanIni && g.CheckOutStatus == GymCheckOutStatus.Manual).ToList();
+            var jarakBulanIni = gymBulanIni.Sum(g => g.JarakTempuhMeter ?? 0);
+            var menitBulanIni = gymBulanIni.Sum(g => g.DurasiMenit ?? 0);
+        }
+        <div class="row g-2 mb-3">
+            <div class="col-4"><div class="border rounded p-2 text-center bg-white h-100"><div class="small text-muted">Sesi bulan ini</div><div class="fs-5 fw-semibold">@gymBulanIni.Count</div></div></div>
+            <div class="col-4"><div class="border rounded p-2 text-center bg-white h-100"><div class="small text-muted">Durasi</div><div class="fs-5 fw-semibold">@GymRules.FormatDuration(menitBulanIni)</div></div></div>
+            <div class="col-4"><div class="border rounded p-2 text-center bg-white h-100"><div class="small text-muted">Jarak GPS</div><div class="fs-5 fw-semibold">@GymRules.FormatDistance(jarakBulanIni)</div></div></div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead class="table-light small"><tr><th>Tanggal</th><th>Aktivitas</th><th>Jam</th><th>Durasi</th><th>Jarak</th><th class="text-end">Berat</th></tr></thead>
+                    <tbody>
+                        @foreach (var g in gym)
+                        {
+                            var state = GymRules.GetState(g, DateTime.UtcNow);
+                            var selesai = state == GymRules.SessionState.Finished;
+                            <tr>
+                                <td class="text-nowrap">@Clock.ToLocal(g.CreatedAt).ToString("dd/MM/yyyy")</td>
+                                <td class="text-nowrap"><span aria-hidden="true">@g.Ikon</span> @g.Aktivitas</td>
+                                <td class="text-nowrap small">@Clock.ToLocal(g.CreatedAt).ToString("HH:mm")@(g.CheckOutAt.HasValue ? " - " + Clock.ToLocal(g.CheckOutAt.Value).ToString("HH:mm") : "")</td>
+                                <td class="text-nowrap">
+                                    @if (g.DurasiMenit.HasValue)
+                                    {
+                                        @GymRules.FormatDuration(g.DurasiMenit)
+                                    }
+                                    else if (state != GymRules.SessionState.Legacy)
+                                    {
+                                        <span class="badge @GymRules.StatusBadge(state)">@GymRules.StatusLabel(state)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    @if (selesai && g.JarakTempuhMeter is int jarak)
+                                    {
+                                        <span class="fw-semibold">@GymRules.FormatDistance(jarak)</span>
+                                        @if (g.PunyaRute)
+                                        {
+                                            <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-route-id="@g.Id" title="Lihat rute"><i class="bi bi-map"></i></button>
+                                        }
+                                        @if (GymRules.FormatPace(g.DurasiDetik, jarak) is string pace)
+                                        {
+                                            <div class="small text-muted">@pace</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td class="text-end">@(g.BeratBadan is decimal bb ? bb.ToString("0.0") + " kg" : "-")</td>
+                            </tr>
+                        }
+                        @if (gym.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-muted">Belum ada riwayat aktivitas.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer small text-muted">Menampilkan maksimal 60 aktivitas terakhir. Ringkasan bulan ini dihitung dari daftar ini.</div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<partial name="_RouteModal" />
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="~/js/fitness-track.js" asp-append-version="true"></script>
+    <script src="~/js/route-map.js" asp-append-version="true"></script>
+    <script>
+        if (window.AKP_ROUTE) AKP_ROUTE.bindModal('@Url.Action("Route", "Portal", new { id = 0 })'.replace(/0$/, '__ID__'));
+    </script>
+    <script>
+        // Perangkat bisa dipakai bersama: keluar otomatis setelah 3 menit tanpa aktivitas
+        (function () {
+            const idleMs = 3 * 60 * 1000;
+            let t;
+            const reset = () => { clearTimeout(t); t = setTimeout(() => document.getElementById('portalLogout').submit(), idleMs); };
+            ['click', 'keydown', 'scroll', 'touchstart'].forEach((ev) => document.addEventListener(ev, reset, { passive: true }));
+            reset();
+        })();
+    </script>
+}

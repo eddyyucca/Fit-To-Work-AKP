@@ -1,0 +1,22 @@
+@{
+    ViewData["Title"] = "Akses Ditolak";
+    var isAdmin = User.Identity?.IsAuthenticated == true && User.IsInRole("Admin");
+}
+<div class="text-center py-5">
+    <h3>🚫 Akses Ditolak</h3>
+    <p class="text-muted">Anda tidak punya izin untuk mengakses halaman ini.</p>
+    @if (isAdmin)
+    {
+        <p class="text-muted small">Hak akses diatur per role. Hubungi Super Admin jika Anda memerlukan akses ke menu ini.</p>
+        <div class="d-flex justify-content-center gap-2">
+            <a class="btn btn-primary" asp-controller="Admin" asp-action="Home">Ke Halaman Admin</a>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                <button type="submit" class="btn btn-outline-secondary">Keluar</button>
+            </form>
+        </div>
+    }
+    else
+    {
+        <a class="btn btn-primary" asp-controller="Account" asp-action="EmployeeLogin">Kembali ke Login</a>
+    }
+</div>

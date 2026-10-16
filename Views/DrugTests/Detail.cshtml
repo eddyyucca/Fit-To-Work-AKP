@@ -1,0 +1,87 @@
+@model DrugAlcoholTest
+@inject FitToWorkApp.Services.IAppClock Clock
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Detail Tes Urin & Alkohol";
+    Layout = "_AdminLayout";
+    var attachments = (AttachmentListViewModel)ViewBag.Attachments;
+}
+
+<div class="mb-4">
+    <a asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId" class="small text-decoration-none">‹ Rekam medis @Model.NamaSnapshot</a>
+    <h4 class="mb-0 mt-1">Tes Urin &amp; Alkohol</h4>
+    <div class="text-muted">
+        @if (Model.IsMitra)
+        {
+            <span class="badge bg-info text-dark me-1">Mitra</span>
+            <text>@Model.NamaSnapshot · ID @Model.NIP · @Model.DepartmentSnapshot@(string.IsNullOrEmpty(Model.PositionSnapshot) ? "" : " · " + Model.PositionSnapshot)</text>
+        }
+        else
+        {
+            <text>@Model.NamaSnapshot · @Model.NIP · @Model.DepartmentSnapshot · @Model.SectionSnapshot</text>
+        }
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-3 @(Model.IsPositive ? "border-danger" : "")">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span class="fw-semibold">@Clock.ToLocal(Model.TestedAt).ToString("dd/MM/yyyy HH:mm") · @DrugTestReasons.Label(Model.Alasan)</span>
+                <span class="badge fs-6 @TestResults.BadgeClass(Model.HasilAkhir)">@Model.HasilAkhir.ToUpperInvariant()</span>
+            </div>
+            <div class="card-body">
+                @if (Model.TesUrin)
+                {
+                    <h6 class="d-flex justify-content-between">🧪 Tes urin <span class="badge @TestResults.BadgeClass(Model.UrinHasil)">@Model.UrinHasil</span></h6>
+                    <table class="table table-sm mb-3">
+                        <tbody>
+                            @foreach (var i in Model.UrineItems)
+                            {
+                                <tr>
+                                    <td class="text-muted">@i.ParameterName</td>
+                                    <td class="text-end"><span class="badge @TestResults.BadgeClass(i.Hasil)">@i.Hasil</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                @if (Model.TesAlkohol)
+                {
+                    <h6 class="d-flex justify-content-between">🍺 Tes alkohol <span class="badge @TestResults.BadgeClass(Model.AlkoholHasil)">@Model.AlkoholHasil</span></h6>
+                    <div class="mb-3">
+                        @if (Model.AlkoholKadar.HasValue)
+                        {
+                            <span>Kadar: <b>@HealthRanges.Fmt(Model.AlkoholKadar.Value)</b></span>
+                            @if (Model.AlkoholBatas.HasValue)
+                            {
+                                <span class="text-muted small"> (batas positif &gt; @HealthRanges.Fmt(Model.AlkoholBatas.Value) saat tes)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted small">Kadar tidak dicatat, hasil dipilih manual.</span>
+                        }
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(Model.Catatan))
+                {
+                    <div class="mb-2"><span class="text-muted small d-block">Catatan</span>@Model.Catatan</div>
+                }
+                <div class="small text-muted">Pemeriksa: @Model.ExaminerName</div>
+            </div>
+        </div>
+
+        <partial name="_Attachments" model="attachments" />
+    </div>
+    <div class="col-lg-5">
+        <div class="d-grid gap-2">
+            <a class="btn btn-primary" asp-controller="DrugTests" asp-action="Create" asp-route-employeeId="@Model.EmployeeId">+ Tes baru untuk karyawan ini</a>
+            <a class="btn btn-outline-secondary" asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@Model.EmployeeId">Lihat rekam medis lengkap</a>
+            <form asp-controller="DrugTests" asp-action="Delete" asp-route-id="@Model.Id" method="post"
+                  data-confirm="Hapus hasil tes ini beserta lampirannya? Gunakan hanya untuk koreksi salah input." data-confirm-ok="Ya, Hapus">
+                <button type="submit" class="btn btn-outline-danger w-100">Hapus (salah input)</button>
+            </form>
+        </div>
+    </div>
+</div>

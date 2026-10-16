@@ -1,0 +1,151 @@
+@using FitToWorkApp.Services
+@using FitToWorkApp.Repositories
+@model FitToWorkApp.Models.ViewModels.FtwSettingsFormViewModel
+@inject IAppClock Clock
+@{
+    ViewData["Title"] = "Pengaturan Pengisian FTW";
+    Layout = "_AdminLayout";
+    var current = (FtwSettings)ViewBag.Current;
+    var info = (FtwSettingsInfo)ViewBag.Info;
+    var isJeda = Model.Mode != FtwResetMode.JamTetap;
+    var jamReset = Model.JamReset.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+    if (jamReset.Count == 0)
+    {
+        jamReset = FtwSettings.Default.JamReset.Select(t => (string?)FtwRules.FormatTime(t)).ToList();
+    }
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Pengaturan Pengisian Fit To Work</h4>
+        <div class="text-muted small">Kapan karyawan bisa mengisi lagi setelah mengisi, dan apa yang tampil setelah mengisi.</div>
+    </div>
+    <form asp-controller="FtwSettings" asp-action="Reset" method="post"
+          data-confirm="Kembalikan pengaturan pengisian ke default (jeda 12 jam, Isi Ulang diizinkan, 8 detik)?" data-confirm-ok="Ya, Reset">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">↺ Kembalikan ke default</button>
+    </form>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <form asp-controller="FtwSettings" asp-action="Save" method="post" id="ftwSettingsForm" autocomplete="off">
+            <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Kapan karyawan bisa mengisi lagi?</div>
+                <div class="card-body">
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="radio" name="Mode" id="modeJeda" value="@FtwResetMode.Jeda" checked="@isJeda" />
+                        <label class="form-check-label fw-semibold" for="modeJeda">Jeda sejak pengisian terakhir</label>
+                    </div>
+                    <div class="ms-4 mb-3" data-mode-panel="Jeda">
+                        <div class="text-muted small mb-2">Contoh 12 jam: isi pukul 06:10 → bisa isi lagi pukul 18:10.</div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div class="input-group input-group-sm" style="max-width:150px">
+                                <input type="number" class="form-control" asp-for="JedaJam" min="0" max="72" step="1" />
+                                <span class="input-group-text">jam</span>
+                            </div>
+                            <div class="input-group input-group-sm" style="max-width:150px">
+                                <input type="number" class="form-control" asp-for="JedaMenit" min="0" max="59" step="5" />
+                                <span class="input-group-text">menit</span>
+                            </div>
+                        </div>
+                        <div class="form-text">Minimal @FtwRules.FormatJeda(FtwRules.MinJedaMenit), maksimal @FtwRules.FormatJeda(FtwRules.MaxJedaMenit).</div>
+                    </div>
+
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="radio" name="Mode" id="modeJamTetap" value="@FtwResetMode.JamTetap" checked="@(!isJeda)" />
+                        <label class="form-check-label fw-semibold" for="modeJamTetap">Reset di jam tertentu (pola shift)</label>
+                    </div>
+                    <div class="ms-4" data-mode-panel="JamTetap">
+                        <div class="text-muted small mb-2">
+                            Contoh 06:00 &amp; 18:00: isi pukul 18:30 → bisa isi lagi besok pukul 06:00.
+                            Maksimal @FtwRules.MaxJamReset jam reset.
+                        </div>
+                        <div id="jamResetList" class="d-flex flex-wrap gap-2 mb-2">
+                            @foreach (var t in jamReset)
+                            {
+                                <div class="input-group input-group-sm jam-reset-item" style="max-width:160px">
+                                    <input type="time" class="form-control" name="JamReset" value="@t" step="60" required />
+                                    <button type="button" class="btn btn-outline-danger" data-remove-jam title="Hapus jam ini">&times;</button>
+                                </div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="addJamReset">+ Tambah jam</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Isi Ulang &amp; layar sudah mengisi</div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" role="switch" asp-for="IzinIsiUlang" />
+                        <label class="form-check-label" asp-for="IzinIsiUlang">Tampilkan tombol "Kondisi Saya Berubah — Isi Ulang"</label>
+                    </div>
+                    <div class="form-text mb-3">
+                        Nyala: karyawan yang kondisinya berubah bisa melapor ulang sebelum periode berikutnya.
+                        Mati: pengisian benar-benar terkunci sampai periode berikutnya (dicek juga di server).
+                    </div>
+
+                    <label class="form-label small" asp-for="DetikKembali">Lama halaman "sudah mengisi" sebelum kembali ke menu utama</label>
+                    <div class="input-group input-group-sm" style="max-width:150px">
+                        <input type="number" class="form-control" asp-for="DetikKembali" min="@FtwRules.MinDetikKembali" max="@FtwRules.MaxDetikKembali" step="1" required />
+                        <span class="input-group-text">detik</span>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Simpan</button>
+        </form>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold">Aturan yang berlaku sekarang</div>
+            <div class="card-body small">
+                <p class="mb-2">@FtwRules.Describe(current).</p>
+                <p class="mb-2">Tombol Isi Ulang: <strong>@(current.IzinIsiUlang ? "tampil" : "tidak tampil")</strong> · Layar "sudah mengisi": <strong>@current.DetikKembali detik</strong></p>
+                <p class="text-muted mb-0">
+                    @if (info.UpdatedAt is not null)
+                    {
+                        <text>Terakhir diubah @Clock.ToLocal(info.UpdatedAt.Value).ToString("dd/MM/yyyy HH:mm") oleh @(info.UpdatedBy ?? "-").</text>
+                    }
+                    else
+                    {
+                        <text>Belum pernah diubah (memakai default).</text>
+                    }
+                    Semua jam memakai zona waktu @ViewBag.TimeZone.
+                </p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Pratinjau (sesuai isian di kiri, belum disimpan)</div>
+            <div class="card-body small">
+                <label class="form-label" for="previewTime">Kalau karyawan mengisi pukul</label>
+                <input type="time" class="form-control form-control-sm mb-2" id="previewTime" value="06:10" step="60" style="max-width:140px" />
+                <div class="alert alert-info py-2 mb-3" id="previewResult">-</div>
+                <table class="table table-sm mb-2">
+                    <thead><tr><th>Isi pukul</th><th>Bisa isi lagi</th></tr></thead>
+                    <tbody id="previewTable"></tbody>
+                </table>
+                <div class="text-muted">
+                    Dashboard tetap menghitung pengisian <strong>terakhir</strong> per karyawan per tanggal.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="jamResetTemplate">
+    <div class="input-group input-group-sm jam-reset-item" style="max-width:160px">
+        <input type="time" class="form-control" name="JamReset" value="" step="60" required />
+        <button type="button" class="btn btn-outline-danger" data-remove-jam title="Hapus jam ini">&times;</button>
+    </div>
+</template>
+
+@section Scripts {
+    <script>window.AKP_FTW_SETTINGS = { maxJam: @FtwRules.MaxJamReset };</script>
+    <script src="~/js/ftw-settings.js" asp-append-version="true"></script>
+}

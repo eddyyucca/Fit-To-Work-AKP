@@ -1,0 +1,211 @@
+@model EmployeeDetailViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    var e = Model.Employee;
+    var s = Model.Summary;
+    ViewData["Title"] = "Detail Karyawan";
+    Layout = "_AdminLayout";
+
+    string Tgl(DateTime? utc, string fmt = "dd/MM/yyyy HH:mm") => utc.HasValue ? Clock.ToLocal(utc.Value).ToString(fmt) : "-";
+    string Or(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+
+    string? umur = null;
+    if (e.TanggalLahir.HasValue)
+    {
+        var today = Clock.ToLocal(DateTime.UtcNow).Date;
+        var age = today.Year - e.TanggalLahir.Value.Year;
+        if (e.TanggalLahir.Value.Date > today.AddYears(-age)) age--;
+        umur = $"{age} tahun";
+    }
+    var gender = e.JenisKelamin switch { "L" => "Laki-laki", "P" => "Perempuan", _ => "-" };
+    var initials = string.Concat(e.Nama.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+    var fitPct = s.FtwTotal > 0 ? Math.Round(s.FtwFit * 100.0 / s.FtwTotal, 1) : 0;
+}
+
+<style>
+    .emp-avatar { width: 64px; height: 64px; font-size: 1.5rem; }
+    .emp-info dt { font-weight: 500; color: var(--bs-secondary-color); font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+    .emp-info dd { margin-bottom: .9rem; font-weight: 600; }
+    .emp-table > :not(caption) > * > :first-child { padding-left: 1rem; }
+    .emp-table > :not(caption) > * > :last-child { padding-right: 1rem; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <a asp-action="Index" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Kembali ke Data Karyawan</a>
+    <a asp-action="Index" asp-route-edit="@e.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square me-1"></i>Edit</a>
+</div>
+
+<div class="row g-3">
+    <!-- Profil -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="emp-avatar rounded-circle text-bg-akp-navy d-inline-flex align-items-center justify-content-center fw-bold">@initials</span>
+                    <div>
+                        <h5 class="mb-1">@e.Nama</h5>
+                        <div class="text-muted">NIP @e.NIP</div>
+                        <span class="badge @(e.IsActive ? "bg-success" : "bg-secondary") mt-1">@(e.IsActive ? "Aktif" : "Nonaktif")</span>
+                    </div>
+                </div>
+                <dl class="emp-info mb-0">
+                    <dt>Division</dt><dd>@Or(e.DivisionName)</dd>
+                    <dt>Department</dt><dd>@Or(e.DepartmentName)</dd>
+                    <dt>Section</dt><dd>@Or(e.SectionName)</dd>
+                    <dt>Jabatan</dt><dd>@Or(e.PositionName)</dd>
+                    <dt>Nomor HP</dt><dd>@Or(e.NomorHp)</dd>
+                    <dt>Tanggal lahir</dt>
+                    <dd>
+                        @(e.TanggalLahir?.ToString("dd/MM/yyyy") ?? "-")
+                        @if (umur is not null) { <span class="text-muted fw-normal">(@umur)</span> }
+                        @if (!e.TanggalLahir.HasValue) { <div class="small text-warning fw-normal">Belum diisi, karyawan belum bisa login Riwayat Saya.</div> }
+                    </dd>
+                    <dt>Jenis kelamin</dt><dd>@gender</dd>
+                    <dt>Terdaftar sejak</dt><dd class="mb-0">@(e.CreatedAt == default ? "-" : Tgl(e.CreatedAt, "dd/MM/yyyy"))</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ringkasan & riwayat -->
+    <div class="col-lg-8">
+        <div class="row g-3 mb-3">
+            @if (Model.CanSeeFtw)
+            {
+                <div class="col-sm-6">
+                    <div class="small-box text-bg-akp-blue mb-0">
+                        <div class="inner"><h3>@s.FtwTotal.ToString("N0")</h3><p>Pengisian Fit To Work</p></div>
+                        <i class="small-box-icon bi bi-clipboard2-check"></i>
+                        <div class="small-box-footer">@(s.FtwTotal > 0 ? $"{fitPct:0.#}% FIT · terakhir {Tgl(s.FtwLastAt)}" : "Belum pernah mengisi")</div>
+                    </div>
+                </div>
+            }
+            @if (Model.CanSeeGym)
+            {
+                <div class="col-sm-6">
+                    <div class="small-box text-bg-akp-green mb-0">
+                        <div class="inner"><h3>@s.GymTotal.ToString("N0")</h3><p>Kunjungan gym</p></div>
+                        <i class="small-box-icon bi bi-activity"></i>
+                        <div class="small-box-footer">@(s.GymTotal > 0 ? $"Terakhir {Tgl(s.GymLastAt)}" : "Belum pernah ke gym")</div>
+                    </div>
+                </div>
+            }
+            @if (Model.CanSeeMedical)
+            {
+                <div class="col-sm-6">
+                    <div class="small-box text-bg-akp-teal mb-0">
+                        <div class="inner"><h3>@s.CheckupTotal.ToString("N0")</h3><p>Pemeriksaan kesehatan</p></div>
+                        <i class="small-box-icon bi bi-heart-pulse"></i>
+                        <div class="small-box-footer">@(s.CheckupTotal > 0 ? $"Terakhir {Tgl(s.CheckupLastAt, "dd/MM/yyyy")}" : "Belum pernah diperiksa")</div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="small-box text-bg-akp-navy mb-0">
+                        <div class="inner"><h3>@s.VisitTotal.ToString("N0")</h3><p>Kunjungan klinik</p></div>
+                        <i class="small-box-icon bi bi-hospital"></i>
+                        <a class="small-box-footer link-light link-underline-opacity-0" asp-controller="MedicalRecord" asp-action="Employee" asp-route-id="@e.Id">
+                            Buka rekam medis <i class="bi bi-arrow-right-circle"></i>
+                        </a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (Model.CanSeeFtw || Model.CanSeeGym)
+        {
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        @if (Model.CanSeeFtw)
+                        {
+                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabFtw" type="button">Fit To Work</button></li>
+                        }
+                        @if (Model.CanSeeGym)
+                        {
+                            <li class="nav-item"><button class="nav-link @(Model.CanSeeFtw ? "" : "active")" data-bs-toggle="tab" data-bs-target="#tabGym" type="button">Gym</button></li>
+                        }
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    @if (Model.CanSeeFtw)
+                    {
+                        <div class="tab-pane fade show active" id="tabFtw" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0 align-middle emp-table">
+                                    <thead class="table-light small"><tr><th>Tanggal</th><th>Jadwal</th><th>Area</th><th>Jam tidur</th><th>Status</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var f in Model.Ftw)
+                                        {
+                                            var isFit = f.KesiapanKerja.StartsWith("YA", StringComparison.OrdinalIgnoreCase);
+                                            <tr>
+                                                <td class="text-nowrap">@Tgl(f.CreatedAt)</td>
+                                                <td class="small">@f.JadwalKerja</td>
+                                                <td class="small">@(string.IsNullOrEmpty(f.AreaKerjaLainnya) ? f.AreaKerja : f.AreaKerjaLainnya)</td>
+                                                <td class="small">@f.JamTidur</td>
+                                                <td><span class="badge @(isFit ? "bg-success" : "bg-danger")">@(isFit ? "FIT" : "TIDAK FIT")</span></td>
+                                                <td class="text-end"><button type="button" class="btn btn-sm btn-link py-0" data-submission-detail="@f.Id">Detail</button></td>
+                                            </tr>
+                                        }
+                                        @if (Model.Ftw.Count == 0)
+                                        {
+                                            <tr><td colspan="6" class="text-muted text-center py-3">Belum ada pengisian.</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer small text-muted d-flex justify-content-between">
+                                <span>30 pengisian terakhir</span>
+                                <a asp-controller="History" asp-action="Index">Buka Riwayat FTW</a>
+                            </div>
+                        </div>
+                    }
+                    @if (Model.CanSeeGym)
+                    {
+                        <div class="tab-pane fade @(Model.CanSeeFtw ? "" : "show active")" id="tabGym" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0 align-middle emp-table">
+                                    <thead class="table-light small"><tr><th>Tanggal</th><th class="text-end">Berat badan</th><th class="text-end">Selisih</th></tr></thead>
+                                    <tbody>
+                                        @for (var i = 0; i < Model.Gym.Count; i++)
+                                        {
+                                            var g = Model.Gym[i];
+                                            decimal? diff = i + 1 < Model.Gym.Count ? g.BeratBadan - Model.Gym[i + 1].BeratBadan : null;
+                                            <tr>
+                                                <td>@Tgl(g.CreatedAt)</td>
+                                                <td class="text-end fw-semibold">@(g.BeratBadan?.ToString("0.0") ?? "-") kg</td>
+                                                <td class="text-end small @(diff > 0 ? "text-danger" : diff < 0 ? "text-success" : "text-muted")">
+                                                    @(diff is null ? "" : diff == 0 ? "0" : diff.Value.ToString("+0.0;-0.0"))
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (Model.Gym.Count == 0)
+                                        {
+                                            <tr><td colspan="3" class="text-muted text-center py-3">Belum ada kunjungan gym.</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer small text-muted">30 kunjungan terakhir</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (!Model.CanSeeMedical)
+        {
+            <div class="alert alert-light border">Riwayat aktivitas hanya tampil untuk role yang punya akses Riwayat FTW / Gym / data medis.</div>
+        }
+    </div>
+</div>
+
+@if (Model.CanSeeFtw)
+{
+    <partial name="_SubmissionDetailModal" />
+}
+
+@section Scripts {
+    @if (Model.CanSeeFtw)
+    {
+        <script src="~/js/submission-detail.js" asp-append-version="true"></script>
+    }
+}

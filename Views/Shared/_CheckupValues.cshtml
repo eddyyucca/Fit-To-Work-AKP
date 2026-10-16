@@ -1,0 +1,71 @@
+@* Hasil satu pemeriksaan kesehatan: skor risiko + nilai per parameter beserta kriteria & poin.
+   Dipakai di admin (detail, rekam medis) & portal karyawan. Data lama (sebelum parameter custom) juga didukung. *@
+@model HealthCheckup
+@using FitToWorkApp.Services
+@inject IAppClock Clock
+@{
+    var rows = CheckupDisplay.Rows(Model);
+}
+@if (Model.UsesParameters && Model.TotalSkor.HasValue)
+{
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2 p-2 rounded bg-body-tertiary">
+        <span class="text-muted small">Total skor risiko</span>
+        <span class="fs-4 fw-bold">@Model.TotalSkor</span>
+        @if (!string.IsNullOrEmpty(Model.RisikoLabel))
+        {
+            <span class="badge fs-6 @RiskColors.BadgeClass(Model.RisikoColor)">@Model.RisikoLabel</span>
+        }
+        @if (!Model.SkorLengkap && Model.SkorParamTotal.HasValue)
+        {
+            <span class="small text-muted">(@Model.SkorParamTerisi dari @Model.SkorParamTotal parameter berpoin terisi)</span>
+        }
+    </div>
+}
+<table class="table table-sm align-middle mb-0">
+    <tbody>
+        @foreach (var r in rows)
+        {
+            <tr>
+                <td class="text-muted" style="width:40%">@r.Label</td>
+                <td class="fw-semibold">@r.ValueText</td>
+                <td class="text-end text-nowrap">
+                    @if (!string.IsNullOrEmpty(r.CriteriaLabel))
+                    {
+                        <span class="badge @CheckupLevels.BadgeClass(r.Level)">@r.CriteriaLabel</span>
+                    }
+                    @if (r.IsScored && r.Points.HasValue)
+                    {
+                        <span class="small text-muted ms-1">@r.Points poin</span>
+                    }
+                </td>
+            </tr>
+        }
+        @if (rows.Count == 0)
+        {
+            <tr><td class="text-muted">Tidak ada nilai yang diukur.</td></tr>
+        }
+    </tbody>
+</table>
+@if (!string.IsNullOrEmpty(Model.Keluhan))
+{
+    <div class="mt-2"><span class="text-muted small">Keluhan:</span> @Model.Keluhan</div>
+}
+@if (!string.IsNullOrEmpty(Model.Catatan))
+{
+    <div class="mt-1"><span class="text-muted small">Catatan pemeriksa:</span> @Model.Catatan</div>
+}
+@if (Model.AdaTemuan)
+{
+    var st = Model.FollowUpStatus(Clock.Today);
+    <div class="mt-2 p-2 rounded bg-body-tertiary small">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+            <span class="text-muted">Temuan &amp; follow up</span>
+            <span class="badge @FollowUpStatuses.BadgeClass(st)">@FollowUpStatuses.Label(st) @Model.FollowUpDate?.ToString("dd/MM/yyyy")</span>
+        </div>
+        <div>@Model.TemuanKeterangan</div>
+        @if (!string.IsNullOrEmpty(Model.FollowUpHasil) && Model.FollowUpDoneAt.HasValue)
+        {
+            <div class="text-success mt-1">✔ @Model.FollowUpHasil</div>
+        }
+    </div>
+}

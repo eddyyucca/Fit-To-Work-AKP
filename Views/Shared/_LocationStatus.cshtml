@@ -1,0 +1,34 @@
+@model LocationUiModel
+@*
+    Kotak status lokasi + input tersembunyi posisi GPS. Letakkan DI DALAM <form data-location-guard>.
+    Script: wwwroot/js/location-guard.js (dimuat oleh halaman).
+    Mode:  off  = kunci lokasi belum aktif (tidak tampil apa-apa)
+           gps  = wajib di dalam radius site, tombol kirim terkunci sampai lokasi lolos
+           wifi = HP sudah di Wi-Fi site, lokasi GPS tetap dicoba untuk dicatat tapi tidak wajib
+*@
+<input type="hidden" name="geoLat" id="geoLat" />
+<input type="hidden" name="geoLng" id="geoLng" />
+<input type="hidden" name="geoAcc" id="geoAcc" />
+
+@if (Model.Mode != LocationUiModel.ModeOff)
+{
+    <div id="locationStatus" class="alert alert-secondary d-flex align-items-start gap-2 py-2 mb-3"
+         data-mode="@Model.Mode" data-check-url="@Url.Action("Check", "Location")" role="status" aria-live="polite">
+        <span class="fs-5 lh-1" id="locationIcon">📍</span>
+        <div class="flex-grow-1 small">
+            <div id="locationText">
+                @if (Model.Mode == LocationUiModel.ModeWifi)
+                {
+                    <text>Terhubung ke Wi-Fi <strong>@Model.WifiSiteName</strong>.</text>
+                }
+                else
+                {
+                    <text>Memeriksa lokasi Anda…</text>
+                }
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-2 d-none" id="locationRetry">
+                <i class="bi bi-arrow-clockwise"></i> Coba Lagi
+            </button>
+        </div>
+    </div>
+}

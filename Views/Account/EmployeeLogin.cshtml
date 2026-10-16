@@ -1,0 +1,39 @@
+@model EmployeeLoginViewModel
+@{
+    ViewData["Title"] = "Absen Karyawan";
+    ViewData["AuthPage"] = true;
+}
+
+<div class="row justify-content-center">
+    <div class="col-sm-9 col-md-6 col-lg-5">
+        <partial name="_AuthLogo" model="@("Fit To Work · Aktivitas Kebugaran · Riwayat Kesehatan")" />
+        <div class="card akp-auth-card">
+            <div class="card-body p-4 text-center">
+                <h5 class="mb-1"><i class="bi bi-person-badge me-1"></i>Masukkan / Scan NIP</h5>
+                <p class="text-muted small mb-4">Ketik NIP Anda atau scan kartu ID, lalu tekan Enter. Cukup sekali: berikutnya HP ini langsung masuk tanpa input NIP lagi.</p>
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+                <form asp-controller="Account" asp-action="EmployeeLogin" method="post">
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <div class="mb-3">
+                        <input asp-for="NIP" class="form-control form-control-lg text-center" autofocus autocomplete="off" placeholder="NIP" />
+                        <span asp-validation-for="NIP" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Lanjutkan</button>
+                </form>
+
+                <a class="btn btn-outline-secondary w-100 mt-3" asp-controller="Portal" asp-action="Login">
+                    <i class="bi bi-clipboard2-pulse me-1"></i>Lihat Riwayat Saya (FTW, Aktivitas &amp; Kesehatan)
+                </a>
+            </div>
+        </div>
+        <p class="text-center small mt-3 mb-0">
+            Admin? <a asp-controller="Account" asp-action="AdminLogin">Masuk ke panel admin</a>
+        </p>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

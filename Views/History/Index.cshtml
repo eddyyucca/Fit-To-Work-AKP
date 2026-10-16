@@ -1,0 +1,111 @@
+@{
+    ViewData["Title"] = "Riwayat Pengisian";
+    Layout = "_AdminLayout";
+    var sections = (List<string>)ViewBag.Sections;
+    var jadwalOptions = (List<string>)ViewBag.JadwalKerjaOptions;
+}
+
+<style>
+    #historyTable td { vertical-align: middle; }
+    .dataTables_processing { background: rgba(255,255,255,.85) !important; border: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h4 class="mb-0">Riwayat Pengisian Fit To Work</h4>
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="small text-muted" id="historySummary">&nbsp;</div>
+        <button type="button" class="btn btn-success btn-sm" id="btnExportExcel" title="Download sesuai filter yang sedang aktif">
+            <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+            📥 Download Excel
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body pb-0">
+        <form id="historyFilter" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fFrom">Dari Tanggal</label>
+                <input type="date" id="fFrom" name="from" class="form-control form-control-sm" value="@ViewBag.DefaultFrom" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fTo">Sampai Tanggal</label>
+                <input type="date" id="fTo" name="to" class="form-control form-control-sm" value="@ViewBag.DefaultTo" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="fSection">Section</label>
+                <select id="fSection" name="section" class="form-select form-select-sm">
+                    <option value="">Semua Section</option>
+                    @foreach (var s in sections)
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fJadwal">Jadwal Kerja</label>
+                <select id="fJadwal" name="jadwal" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    @foreach (var j in jadwalOptions)
+                    {
+                        <option value="@j">@j</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="fKesiapan">Kesiapan</label>
+                <select id="fKesiapan" name="kesiapan" class="form-select form-select-sm">
+                    <option value="">Semua</option>
+                    <option value="fit">FIT</option>
+                    <option value="unfit">TIDAK FIT</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-1 d-grid">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetFilter">Reset</button>
+            </div>
+            <div class="col-12">
+                <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Rentang cepat">
+                    <button type="button" class="btn btn-outline-primary" data-range="0">Hari ini</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="6">7 hari</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="29">30 hari</button>
+                    <button type="button" class="btn btn-outline-primary" data-range="all">Semua</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            @* Tidak pakai class "datatable" supaya tidak di-init otomatis (client-side) oleh _AdminLayout *@
+            <table class="table mb-0 align-middle w-100" id="historyTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>Waktu</th>
+                        <th>NIP</th>
+                        <th>Nama</th>
+                        <th>Section</th>
+                        <th>Jadwal</th>
+                        <th>Kesiapan</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal detail pengisian (dipakai bersama dengan Dashboard) -->
+<partial name="_SubmissionDetailModal" />
+
+@section Scripts {
+    <script>
+        window.FTW_HISTORY = {
+            dataUrl: '@Url.Action("Data", "History")',
+            exportUrl: '@Url.Action("Export", "History")',
+            maxExportRows: @FitToWorkApp.Controllers.Admin.HistoryController.MaxExportRows,
+            defaultFrom: '@ViewBag.DefaultFrom',
+            defaultTo: '@ViewBag.DefaultTo'
+        };
+    </script>
+    <script src="~/js/submission-detail.js" asp-append-version="true"></script>
+    <script src="~/js/history.js" asp-append-version="true"></script>
+}

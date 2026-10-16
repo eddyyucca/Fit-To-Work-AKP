@@ -1,0 +1,67 @@
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Batas Alkohol & Follow Up";
+    Layout = "_AdminLayout";
+    var overrides = (Dictionary<string, decimal>)ViewBag.Overrides;
+    var current = HealthRanges.Current;
+    string Inv(decimal v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h4 class="mb-0">Batas Tes Alkohol &amp; Usulan Follow Up</h4>
+        <div class="text-muted small">
+            Kriteria, poin & warna hasil pemkes sekarang diatur di menu
+            <a asp-controller="CheckupParameters" asp-action="Index">Parameter &amp; Skor Pemkes</a>.
+        </div>
+    </div>
+    <form asp-controller="HealthReferences" asp-action="Reset" method="post"
+          data-confirm="Kembalikan batas alkohol & usulan follow up ke default?" data-confirm-ok="Ya, Reset">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">↺ Kembalikan ke default</button>
+    </form>
+</div>
+
+<form asp-controller="HealthReferences" asp-action="Save" method="post" autocomplete="off">
+    <div class="row g-3">
+        @foreach (var g in HealthRanges.Definitions.Where(d => !d.IsLegacy).GroupBy(d => d.Group))
+        {
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white fw-semibold">@g.Key</div>
+                    <div class="card-body">
+                        @foreach (var d in g)
+                        {
+                            var changed = overrides.TryGetValue(d.Key, out var ov) && ov != d.Default;
+                            var step = d.Decimals == 0 ? "1" : "0." + new string('0', d.Decimals - 1) + "1";
+                            <div class="row g-2 align-items-center mb-2">
+                                <label class="col-sm-7 col-form-label col-form-label-sm" for="@("ref_" + d.Key)">
+                                    @d.Label
+                                    @if (changed)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1" title="Berbeda dari default">diubah</span>
+                                    }
+                                </label>
+                                <div class="col-sm-5">
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" class="form-control" id="@("ref_" + d.Key)" name="@($"values[{d.Key}]")"
+                                               value="@Inv(current[d.Key])" step="@step" min="@Inv(d.Min)" max="@Inv(d.Max)" required />
+                                        <span class="input-group-text">@d.Unit</span>
+                                    </div>
+                                    <div class="form-text mt-0">Default: @HealthRanges.Fmt(d.Default)</div>
+                                </div>
+                            </div>
+                            if (!string.IsNullOrEmpty(d.Hint))
+                            {
+                                <div class="small text-muted mb-2">@d.Hint</div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+    </div>
+</form>

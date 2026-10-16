@@ -1,0 +1,91 @@
+@model EmployeeFormViewModel
+@{
+    var divisionOptions = (List<FitToWorkApp.Models.Division>)ViewBag.DivisionOptions;
+    var departmentOptions = (List<FitToWorkApp.Models.Department>)ViewBag.DepartmentOptions;
+    var sectionOptions = (List<FitToWorkApp.Models.Section>)ViewBag.SectionOptions;
+    var positionOptions = (List<FitToWorkApp.Models.Position>)ViewBag.PositionOptions;
+}
+
+<div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+<input type="hidden" asp-for="Id" />
+<input type="hidden" asp-for="IsEdit" />
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <label asp-for="NIP" class="form-label"></label>
+        <input asp-for="NIP" class="form-control" />
+        <span asp-validation-for="NIP" class="text-danger small"></span>
+        <div class="form-text">NIP ini yang dipakai karyawan untuk masuk ke halaman pengisian Fit To Work.</div>
+    </div>
+    <div class="col-md-8 mb-3">
+        <label asp-for="Nama" class="form-label"></label>
+        <input asp-for="Nama" class="form-control" />
+        <span asp-validation-for="Nama" class="text-danger small"></span>
+    </div>
+</div>
+
+<div class="mb-3">
+    <label asp-for="NomorHp" class="form-label"></label>
+    <input asp-for="NomorHp" class="form-control" />
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-3">
+        <label asp-for="DivisionId" class="form-label"></label>
+        <select asp-for="DivisionId" class="form-select">
+            <option value="">-- Pilih Division --</option>
+            @foreach (var dv in divisionOptions)
+            {
+                <option value="@dv.Id" selected="@(Model.DivisionId == dv.Id)">@dv.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3 mb-3">
+        <label asp-for="DepartmentId" class="form-label"></label>
+        <select asp-for="DepartmentId" class="form-select">
+            <option value="">-- Pilih Department --</option>
+            @foreach (var d in departmentOptions)
+            {
+                <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)">@d.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3 mb-3">
+        <label asp-for="SectionId" class="form-label"></label>
+        <select asp-for="SectionId" class="form-select">
+            <option value="">-- Pilih Section --</option>
+            @foreach (var s in sectionOptions)
+            {
+                <option value="@s.Id" selected="@(Model.SectionId == s.Id)">@s.Name</option>
+            }
+        </select>
+        <span asp-validation-for="SectionId" class="text-danger small"></span>
+    </div>
+    <div class="col-md-3 mb-3">
+        <label asp-for="PositionId" class="form-label"></label>
+        <select asp-for="PositionId" class="form-select">
+            <option value="">-- Pilih Position --</option>
+            @foreach (var p in positionOptions)
+            {
+                <option value="@p.Id" selected="@(Model.PositionId == p.Id)">@p.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (divisionOptions.Count == 0 || departmentOptions.Count == 0 || sectionOptions.Count == 0 || positionOptions.Count == 0)
+{
+    <div class="alert alert-warning small">
+        Beberapa daftar Division/Department/Section/Position masih kosong. Lengkapi dulu lewat menu
+        <a asp-controller="Organization" asp-action="Index">🏢 Data Organisasi</a> supaya pilihan di sini lengkap.
+    </div>
+}
+
+<div class="form-check mb-4">
+    <input asp-for="IsActive" class="form-check-input" />
+    <label asp-for="IsActive" class="form-check-label">Karyawan Aktif</label>
+</div>
+
+<button type="submit" class="btn btn-primary">Simpan</button>
+<a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary">Batal</a>

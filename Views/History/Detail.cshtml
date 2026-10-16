@@ -1,0 +1,82 @@
+@model FitToWorkSubmission
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Detail Pengisian";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Detail Pengisian — @Model.NamaSnapshot</h4>
+    <a asp-controller="History" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Kembali</a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Waktu Pengisian</dt>
+            <dd class="col-sm-8">@Clock.ToLocal(Model.CreatedAt).ToString("dd/MM/yyyy HH:mm")</dd>
+
+            <dt class="col-sm-4">NIP</dt>
+            <dd class="col-sm-8">@Model.NIP</dd>
+
+            <dt class="col-sm-4">Nama</dt>
+            <dd class="col-sm-8">@Model.NamaSnapshot</dd>
+
+            <dt class="col-sm-4">Section</dt>
+            <dd class="col-sm-8">@Model.SectionSnapshot</dd>
+
+            <dt class="col-sm-4">Nomor HP</dt>
+            <dd class="col-sm-8">@Model.NomorHp</dd>
+
+            <dt class="col-sm-4">Jadwal Kerja</dt>
+            <dd class="col-sm-8">@Model.JadwalKerja</dd>
+
+            <dt class="col-sm-4">Area Kerja</dt>
+            <dd class="col-sm-8">@Model.AreaKerja @(string.IsNullOrEmpty(Model.AreaKerjaLainnya) ? "" : $"({Model.AreaKerjaLainnya})")</dd>
+
+            <dt class="col-sm-4">Jam Tidur</dt>
+            <dd class="col-sm-8">@Model.JamTidur</dd>
+
+            <dt class="col-sm-4">Kualitas Tidur</dt>
+            <dd class="col-sm-8">@Model.KualitasTidur</dd>
+
+            <dt class="col-sm-4">Gejala Kesehatan</dt>
+            <dd class="col-sm-8">@Model.GejalaKesehatan</dd>
+
+            <dt class="col-sm-4">Kondisi Fokus &amp; Pikiran</dt>
+            <dd class="col-sm-8">@Model.KondisiFokus</dd>
+
+            <dt class="col-sm-4">Konsumsi Obat 12 Jam Terakhir</dt>
+            <dd class="col-sm-8">@Model.KonsumsiObat</dd>
+
+            <dt class="col-sm-4">Lokasi Pengisian</dt>
+            <dd class="col-sm-8">
+                @{ var lokasi = FitToWorkApp.Services.LocationDisplay.Text(Model); var maps = FitToWorkApp.Services.LocationDisplay.MapsUrl(Model); }
+                @if (lokasi is null)
+                {
+                    <span class="text-muted">-</span>
+                }
+                else if (maps is not null)
+                {
+                    <a href="@maps" target="_blank" rel="noopener">@lokasi</a>
+                }
+                else
+                {
+                    @lokasi
+                }
+            </dd>
+
+            <dt class="col-sm-4">Kesiapan Kerja</dt>
+            <dd class="col-sm-8">
+                @if (Model.KesiapanKerja.StartsWith("YA"))
+                {
+                    <span class="badge bg-success">@Model.KesiapanKerja</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger">@Model.KesiapanKerja</span>
+                }
+            </dd>
+        </dl>
+    </div>
+</div>

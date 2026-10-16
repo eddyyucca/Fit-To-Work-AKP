@@ -1,0 +1,222 @@
+@model Employee
+@inject FitToWorkApp.Services.IAppClock Clock
+@using FitToWorkApp.Services
+@{
+    ViewData["Title"] = "Rekam Medis " + Model.Nama;
+    Layout = "_AdminLayout";
+    var checkups = (List<HealthCheckup>)ViewBag.Checkups;
+    var visits = (List<ClinicVisit>)ViewBag.Visits;
+    bool canCheckup = ViewBag.CanCheckup;
+    bool canVisit = ViewBag.CanVisit;
+    bool canDrugTest = ViewBag.CanDrugTest;
+    var drugTests = (List<DrugAlcoholTest>)ViewBag.DrugTests;
+    DateTime today = ViewBag.Today;
+    int? umur = ViewBag.Umur;
+    var latest = checkups.FirstOrDefault();
+
+}
+
+<div class="mb-4">
+    <a asp-controller="MedicalRecord" asp-action="Index" class="small text-decoration-none">‹ Cari karyawan lain</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mt-1">
+        <div>
+            <h4 class="mb-0">@Model.Nama</h4>
+            <div class="text-muted">
+                @if (Model.IsMitra)
+                {
+                    <span class="badge bg-info text-dark me-1">Mitra</span>
+                    <text>ID @Model.NIP · @Model.MitraNama@(string.IsNullOrEmpty(Model.MitraJabatan) ? "" : " · " + Model.MitraJabatan)</text>
+                }
+                else
+                {
+                    <text>NIP @Model.NIP · @Model.DepartmentName · @Model.SectionName · @Model.PositionName</text>
+                }
+                @if (Model.JenisKelamin is not null) { <text>· @(Model.JenisKelamin == "L" ? "Laki-laki" : "Perempuan")</text> }
+                @if (umur.HasValue) { <text>· @umur tahun</text> }
+                @if (!Model.IsActive) { <span class="badge bg-secondary ms-1">Nonaktif</span> }
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            @if (canCheckup)
+            {
+                <a class="btn btn-sm btn-primary" asp-controller="Checkups" asp-action="Create" asp-route-employeeId="@Model.Id">+ Pemeriksaan</a>
+            }
+            @if (canVisit)
+            {
+                <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-employeeId="@Model.Id">+ Kunjungan Klinik</a>
+            }
+            @if (canDrugTest)
+            {
+                <a class="btn btn-sm btn-primary" asp-controller="DrugTests" asp-action="Create" asp-route-employeeId="@Model.Id">+ Tes Urin/Alkohol</a>
+            }
+        </div>
+    </div>
+</div>
+
+@if (!Model.IsMitra && (Model.JenisKelamin is null || Model.TanggalLahir is null))
+{
+    <div class="alert alert-light border small py-2">
+        Tanggal lahir / jenis kelamin belum diisi di Data Karyawan. Keduanya dipakai untuk skor pemkes (umur & jenis kelamin) dan login Riwayat Saya.
+    </div>
+}
+
+@if (canCheckup)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">
+                    Pemeriksaan terakhir
+                    @if (latest is not null)
+                    {
+                        <span class="text-muted fw-normal small">· @Clock.ToLocal(latest.ExaminedAt).ToString("dd/MM/yyyy")</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (latest is null)
+                    {
+                        <div class="text-muted">Belum ada pemeriksaan.</div>
+                    }
+                    else
+                    {
+                        <partial name="_CheckupValues" model="latest" />
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">Riwayat pemeriksaan (@checkups.Count)</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle text-nowrap">
+                        <thead class="table-light small">
+                            <tr><th>Tanggal</th><th>Skor</th><th>Nilai di luar normal</th><th>Follow up</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in checkups)
+                            {
+                                var abnormal = CheckupDisplay.Abnormal(c).ToList();
+                                <tr>
+                                    <td>@Clock.ToLocal(c.ExaminedAt).ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (c.TotalSkor.HasValue)
+                                        {
+                                            <span class="fw-semibold">@c.TotalSkor</span>
+                                            <span class="badge @RiskColors.BadgeClass(c.RisikoColor)">@c.RisikoLabel</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td class="text-wrap small">
+                                        @foreach (var a in abnormal)
+                                        {
+                                            <span class="badge @CheckupLevels.BadgeClass(a.Level) fw-normal mb-1" title="@a.CriteriaLabel">@a.Label: @a.ValueText</span>
+                                        }
+                                        @if (abnormal.Count == 0)
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (c.AdaTemuan)
+                                        {
+                                            var st = c.FollowUpStatus(today);
+                                            <span class="badge @FollowUpStatuses.BadgeClass(st)" title="@c.TemuanKeterangan">@FollowUpStatuses.Label(st) @c.FollowUpDate?.ToString("dd/MM")</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        @if (c.AttachmentCount > 0)
+                                        {
+                                            <span title="@c.AttachmentCount lampiran">📎</span>
+                                        }
+                                        <a class="small" asp-controller="Checkups" asp-action="Detail" asp-route-id="@c.Id">detail</a>
+                                    </td>
+                                </tr>
+                            }
+                            @if (checkups.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted">Belum ada data.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (canVisit)
+{
+    <h5 class="mb-3">Kunjungan klinik (@visits.Count(v => !v.IsCancelled))</h5>
+    @if (visits.Count == 0)
+    {
+        <div class="text-muted">Belum ada kunjungan klinik.</div>
+    }
+    <div class="row">
+        @foreach (var v in visits)
+        {
+            <div class="col-lg-6">
+                <partial name="_VisitCard" model="v" view-data='new ViewDataDictionary(ViewData) { ["ShowAdminLink"] = true }' />
+            </div>
+        }
+    </div>
+}
+
+@if (canDrugTest)
+{
+    <h5 class="mb-3 mt-4">Tes urin &amp; alkohol (@drugTests.Count)</h5>
+    <div class="card shadow-sm mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light small">
+                    <tr><th>Tanggal</th><th>Alasan</th><th>Urin</th><th>Alkohol</th><th>Hasil</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in drugTests)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@Clock.ToLocal(t.TestedAt).ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="small">@DrugTestReasons.Label(t.Alasan)</td>
+                            <td>
+                                @if (t.TesUrin)
+                                {
+                                    <span class="badge @TestResults.BadgeClass(t.UrinHasil)">@t.UrinHasil</span>
+                                    @if (t.UrinHasil == TestResults.Positif)
+                                    {
+                                        <span class="small text-danger">@string.Join(", ", t.UrineItems.Where(i => i.Hasil == TestResults.Positif).Select(i => i.ParameterName))</span>
+                                    }
+                                }
+                                else { <span class="text-muted">-</span> }
+                            </td>
+                            <td>
+                                @if (t.TesAlkohol)
+                                {
+                                    <span class="badge @TestResults.BadgeClass(t.AlkoholHasil)">@t.AlkoholHasil</span>
+                                    @if (t.AlkoholKadar.HasValue)
+                                    {
+                                        <span class="small text-muted">@HealthRanges.Fmt(t.AlkoholKadar.Value)</span>
+                                    }
+                                }
+                                else { <span class="text-muted">-</span> }
+                            </td>
+                            <td><span class="badge @TestResults.BadgeClass(t.HasilAkhir)">@t.HasilAkhir.ToUpperInvariant()</span></td>
+                            <td class="text-end">
+                                @if (t.AttachmentCount > 0)
+                                {
+                                    <span title="@t.AttachmentCount lampiran">📎</span>
+                                }
+                                <a class="small" asp-controller="DrugTests" asp-action="Detail" asp-route-id="@t.Id">detail</a>
+                            </td>
+                        </tr>
+                    }
+                    @if (drugTests.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-muted">Belum ada tes.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

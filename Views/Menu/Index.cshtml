@@ -1,0 +1,67 @@
+@model Employee
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Menu Utama";
+    var gymOpen = ViewBag.GymOpen as GymAttendance;
+}
+
+<style>
+    .menu-tile { display: block; text-decoration: none; color: inherit; border: 0; transition: transform .1s ease, box-shadow .1s ease; }
+    .menu-tile:hover, .menu-tile:focus { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.12) !important; }
+    .menu-tile .menu-icon { font-size: 3rem; line-height: 1; }
+</style>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="text-center mb-4">
+            <h4 class="mb-1">Halo, @Model.Nama</h4>
+            <p class="text-muted small mb-0">
+                NIP @Model.NIP@(string.IsNullOrEmpty(Model.DepartmentName) ? "" : " · " + Model.DepartmentName)
+            </p>
+            <p class="text-muted mb-0 mt-2">Silakan pilih menu:</p>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-md-4">
+                <a asp-controller="Form" asp-action="Index" class="card shadow-sm menu-tile h-100">
+                    <div class="card-body p-4 text-center">
+                        <div class="menu-icon">🛡️</div>
+                        <h5 class="mt-3 mb-1">Fit To Work</h5>
+                        <p class="text-muted small mb-0">Cek kesehatan &amp; kesiapan kerja harian</p>
+                    </div>
+                </a>
+            </div>
+            <div class="col-12 col-md-4">
+                <a asp-controller="Gym" asp-action="Index" class="card shadow-sm menu-tile h-100">
+                    <div class="card-body p-4 text-center">
+                        <div class="menu-icon">@(gymOpen?.Ikon ?? "🏃")</div>
+                        <h5 class="mt-3 mb-1">Aktivitas Kebugaran</h5>
+                        @if (gymOpen is not null)
+                        {
+                            <p class="small mb-0"><span class="badge text-bg-success">@gymOpen.Aktivitas sejak @Clock.ToLocal(gymOpen.CreatedAt).ToString("HH:mm")</span></p>
+                            <p class="text-danger small fw-semibold mb-0 mt-1">Ketuk untuk @(gymOpen.IsGps ? "lanjut / selesai" : "selesai")</p>
+                        }
+                        else
+                        {
+                            <p class="text-muted small mb-0">Gym, lari, jalan cepat, hiking &amp; olahraga lain</p>
+                        }
+                    </div>
+                </a>
+            </div>
+            <div class="col-12 col-md-4">
+                <a asp-controller="Portal" asp-action="Login" asp-route-nip="@Model.NIP" class="card shadow-sm menu-tile h-100">
+                    <div class="card-body p-4 text-center">
+                        <div class="menu-icon">📋</div>
+                        <h5 class="mt-3 mb-1">Riwayat Saya</h5>
+                        <p class="text-muted small mb-0">FTW, aktivitas, pemeriksaan &amp; klinik (perlu tanggal lahir)</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <form asp-controller="Account" asp-action="Logout" method="post" id="logoutForm" class="text-center mt-4">
+            <button type="submit" class="btn btn-link text-muted">Bukan Anda? Keluar</button>
+            <div class="text-muted small"><i class="bi bi-phone me-1"></i>NIP Anda diingat di HP ini. Tekan "Keluar" kalau HP ini bukan milik Anda.</div>
+        </form>
+    </div>
+</div>

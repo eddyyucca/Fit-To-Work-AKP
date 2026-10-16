@@ -1,0 +1,120 @@
+@model AdminUserCreateViewModel
+@{
+    ViewData["Title"] = "Tambah User Admin";
+    Layout = "_AdminLayout";
+}
+
+<h4 class="mb-4">Tambah User Admin</h4>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4" style="max-width:500px;">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <form asp-controller="Users" asp-action="Create" method="post">
+            <div class="mb-3 position-relative">
+                <label class="form-label">Cari Karyawan (opsional)</label>
+                <input type="text" id="employeeSearch" class="form-control" autocomplete="off"
+                       placeholder="Ketik NIP atau nama karyawan untuk isi otomatis..." />
+                <div id="employeeSuggestions" class="list-group position-absolute w-100" style="z-index:1050; top:100%;"></div>
+                <div class="form-text">Pilih karyawan dari daftar untuk otomatis isi Nama Lengkap (hindari salah ketik).</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Username" class="form-label"></label>
+                <input asp-for="Username" class="form-control" autocomplete="off" />
+                <span asp-validation-for="Username" class="text-danger small"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="FullName" class="form-label"></label>
+                <input asp-for="FullName" class="form-control" id="fullNameInput" />
+                <span asp-validation-for="FullName" class="text-danger small"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="RoleId" class="form-label"></label>
+                <select asp-for="RoleId" class="form-select">
+                    <option value="">-- Pilih role --</option>
+                    @foreach (var r in (List<Role>)ViewBag.Roles)
+                    {
+                        <option value="@r.Id">@r.Name@(string.IsNullOrEmpty(r.Description) ? "" : " — " + r.Description)</option>
+                    }
+                </select>
+                <div class="form-text">Menentukan menu apa saja yang bisa dibuka. Atur di <a asp-controller="Roles" asp-action="Index">Role &amp; Hak Akses</a>.</div>
+                <span asp-validation-for="RoleId" class="text-danger small"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="Password" class="text-danger small"></span>
+            </div>
+            <div class="mb-4">
+                <label asp-for="ConfirmPassword" class="form-label"></label>
+                <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Simpan</button>
+            <a asp-controller="Users" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            var searchInput = document.getElementById('employeeSearch');
+            var suggestionsBox = document.getElementById('employeeSuggestions');
+            var fullNameInput = document.getElementById('fullNameInput');
+            var usernameInput = document.getElementById('Username');
+            var debounceTimer = null;
+
+            function clearSuggestions() {
+                suggestionsBox.innerHTML = '';
+            }
+
+            searchInput.addEventListener('input', function () {
+                var q = searchInput.value.trim();
+                clearTimeout(debounceTimer);
+
+                if (q.length < 2) {
+                    clearSuggestions();
+                    return;
+                }
+
+                debounceTimer = setTimeout(function () {
+                    fetch('/Admin/Users/SearchEmployee?q=' + encodeURIComponent(q))
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            clearSuggestions();
+                            if (!data.length) {
+                                var empty = document.createElement('div');
+                                empty.className = 'list-group-item text-muted small';
+                                empty.textContent = 'Karyawan tidak ditemukan';
+                                suggestionsBox.appendChild(empty);
+                                return;
+                            }
+                            data.forEach(function (emp) {
+                                var item = document.createElement('button');
+                                item.type = 'button';
+                                item.className = 'list-group-item list-group-item-action';
+                                item.innerHTML = '<strong>' + emp.nama + '</strong><br><span class="text-muted small">' + emp.nip + ' — ' + emp.section + '</span>';
+                                item.addEventListener('click', function () {
+                                    fullNameInput.value = emp.nama;
+                                    if (!usernameInput.value) {
+                                        usernameInput.value = emp.nip;
+                                    }
+                                    searchInput.value = emp.nama;
+                                    clearSuggestions();
+                                });
+                                suggestionsBox.appendChild(item);
+                            });
+                        });
+                }, 300);
+            });
+
+            document.addEventListener('click', function (e) {
+                if (e.target !== searchInput) clearSuggestions();
+            });
+        })();
+    </script>
+}

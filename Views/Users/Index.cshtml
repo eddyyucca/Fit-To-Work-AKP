@@ -1,0 +1,123 @@
+@model IEnumerable<AdminUser>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Manajemen User Admin";
+    Layout = "_AdminLayout";
+    int currentAdminId = ViewBag.CurrentAdminId;
+    bool currentIsSuperAdmin = ViewBag.CurrentIsSuperAdmin;
+    var roles = (List<Role>)ViewBag.Roles;
+    var usersList = Model.ToList();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Manajemen User Admin</h4>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-controller="Roles" asp-action="Index">🛡️ Role &amp; Hak Akses</a>
+        <a class="btn btn-primary" asp-controller="Users" asp-action="Create">+ Tambah User Admin</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle datatable" id="usersTable">
+            <thead class="table-light">
+                <tr>
+                    <th>Username</th>
+                    <th>Nama Lengkap</th>
+                    <th>Karyawan</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Dibuat</th>
+                    <th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in usersList)
+                {
+                    // Akun Super Admin hanya bisa dikelola sesama Super Admin
+                    var canManage = u.Id != currentAdminId && (currentIsSuperAdmin || !u.IsSuperAdmin);
+                    <tr class="@(u.IsActive ? "" : "text-muted")">
+                        <td>
+                            @u.Username
+                            @if (u.Id == currentAdminId)
+                            {
+                                <span class="badge bg-primary ms-1">Anda</span>
+                            }
+                        </td>
+                        <td>@u.FullName</td>
+                        <td class="small">
+                            @if (u.EmployeeId.HasValue)
+                            {
+                                <span class="text-nowrap">@u.EmployeeNip</span><br /><span class="text-muted">@u.EmployeeNama</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td data-order="@(u.RoleName ?? "")">
+                            @if (canManage)
+                            {
+                                <form asp-controller="Users" asp-action="SetRole" asp-route-id="@u.Id" method="post"
+                                      class="d-flex gap-1 align-items-center">
+                                    <select name="roleId" class="form-select form-select-sm" style="min-width:10rem"
+                                            onchange="this.form.querySelector('button').classList.remove('d-none')">
+                                        @if (u.RoleId is null)
+                                        {
+                                            <option value="" selected disabled>(belum ada role)</option>
+                                        }
+                                        @foreach (var r in roles)
+                                        {
+                                            <option value="@r.Id" selected="@(r.Id == u.RoleId)">@r.Name</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary d-none">Simpan</button>
+                                </form>
+                            }
+                            else if (u.RoleName is null)
+                            {
+                                <span class="badge bg-warning text-dark">Belum ada role</span>
+                            }
+                            else
+                            {
+                                <span class="badge @(u.IsSuperAdmin ? "bg-dark" : "text-bg-light border")">@u.RoleName</span>
+                            }
+                        </td>
+                        <td data-order="@(u.IsActive ? 1 : 0)">
+                            @if (u.IsActive) { <span class="badge bg-success">Aktif</span> }
+                            else { <span class="badge bg-secondary">Nonaktif</span> }
+                        </td>
+                        <td>@Clock.ToLocal(u.CreatedAt).ToString("dd/MM/yyyy")</td>
+                        <td class="text-end text-nowrap">
+                            @if (u.Id == currentAdminId || canManage)
+                            {
+                                <a class="btn btn-sm btn-outline-primary" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">Edit</a>
+                            }
+                            @if (u.Id == currentAdminId || canManage)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary" asp-controller="Users" asp-action="ChangePassword"
+                                   asp-route-id="@u.Id">
+                                    @(u.Id == currentAdminId ? "Ganti Password Saya" : "Reset Password")
+                                </a>
+                            }
+                            @if (canManage)
+                            {
+                                <form asp-controller="Users" asp-action="ToggleActive" asp-route-id="@u.Id" method="post" class="d-inline"
+                                      data-confirm="@(u.IsActive ? "Nonaktifkan akun " + u.Username + "? Akun tidak bisa login dan sesinya yang aktif diputus." : "Aktifkan kembali akun " + u.Username + "?")"
+                                      data-confirm-ok="@(u.IsActive ? "Ya, Nonaktifkan" : "Ya, Aktifkan")">
+                                    <input type="hidden" name="activate" value="@(u.IsActive ? "false" : "true")" />
+                                    <button type="submit" class="btn btn-sm @(u.IsActive ? "btn-outline-warning" : "btn-outline-success")">@(u.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                                </form>
+                                <form asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" method="post"
+                                      class="d-inline"
+                                      data-confirm="Hapus akun admin ini? Tindakan tidak bisa dibatalkan." data-confirm-ok="Ya, Hapus">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Hapus</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

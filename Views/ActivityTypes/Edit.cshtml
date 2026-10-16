@@ -1,0 +1,148 @@
+@model FitToWorkApp.Controllers.Admin.ActivityTypeFormViewModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Tambah Jenis Aktivitas" : "Ubah Jenis Aktivitas";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">@ViewData["Title"]</h4>
+        <div class="text-muted small">Aturan baru berlaku untuk sesi yang dimulai setelah disimpan.</div>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary">‹ Kembali</a>
+</div>
+
+<form asp-action="Save" method="post" autocomplete="off" id="typeForm">
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-3 col-md-2">
+                            <label asp-for="Ikon" class="form-label"></label>
+                            <input asp-for="Ikon" class="form-control text-center fs-4 py-1" maxlength="16" />
+                        </div>
+                        <div class="col-9 col-md-6">
+                            <label asp-for="Nama" class="form-label"></label>
+                            <input asp-for="Nama" class="form-control" maxlength="60" placeholder="mis. Lari" />
+                            <span asp-validation-for="Nama" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Kode" class="form-label"></label>
+                            @if (isNew)
+                            {
+                                <input asp-for="Kode" class="form-control text-uppercase" maxlength="20" placeholder="mis. LARI" />
+                            }
+                            else
+                            {
+                                <input asp-for="Kode" class="form-control" readonly />
+                            }
+                            <span asp-validation-for="Kode" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12"><span asp-validation-for="Ikon" class="text-danger small"></span></div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input asp-for="PakaiGps" class="form-check-input" role="switch" />
+                                <label asp-for="PakaiGps" class="form-check-label"></label>
+                            </div>
+                            <div class="form-text">Untuk lari, jalan cepat, hiking, bersepeda. Karyawan wajib membiarkan layar menyala selama merekam.</div>
+                        </div>
+                        <div class="col-12 col-md-6" id="speedGroup">
+                            <label asp-for="MaksKecepatanKmh" class="form-label"></label>
+                            <input asp-for="MaksKecepatanKmh" type="number" step="0.5" min="5" max="120" class="form-control" inputmode="decimal" />
+                            <span asp-validation-for="MaksKecepatanKmh" class="text-danger small"></span>
+                            <div class="form-text">Titik GPS yang "melompat" lebih cepat dari ini dibuang. Saran: jalan 12, lari 25, sepeda 60.</div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input asp-for="WajibBerat" class="form-check-input" role="switch" />
+                                <label asp-for="WajibBerat" class="form-check-label"></label>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4">
+                            <label asp-for="MaksJam" class="form-label"></label>
+                            <div class="input-group">
+                                <input asp-for="MaksJam" type="number" min="1" max="12" class="form-control" />
+                                <span class="input-group-text">jam</span>
+                            </div>
+                            <span asp-validation-for="MaksJam" class="text-danger small"></span>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label asp-for="SortOrder" class="form-label"></label>
+                            <input asp-for="SortOrder" type="number" min="0" max="999" class="form-control" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Kunci lokasi</label>
+                            @foreach (var opt in ActivityLocationLock.All)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="KunciLokasi" id="@("lock_" + opt)" value="@opt" checked="@(Model.KunciLokasi == opt)" />
+                                    <label class="form-check-label" for="@("lock_" + opt)">@ActivityLocationLock.Label(opt)</label>
+                                </div>
+                            }
+                            <span asp-validation-for="KunciLokasi" class="text-danger small"></span>
+                            <div class="form-text">Hanya berlaku kalau ada lokasi site aktif (Master Data › Lokasi Site). Aktivitas di luar site (lari, hiking) pakai "Mulai di area site".</div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsActive" class="form-check-input" role="switch" />
+                                <label asp-for="IsActive" class="form-check-label">Aktif (tampil di pilihan karyawan)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white text-end">
+                    <a asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Simpan</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 bg-light">
+                <div class="card-body small">
+                    <div class="fw-semibold mb-2">Pratinjau tombol di HP karyawan</div>
+                    <div class="d-inline-flex flex-column align-items-center justify-content-center border border-2 border-primary rounded-3 bg-white p-3" style="min-width:120px">
+                        <span class="fs-2" id="pvIkon">@Model.Ikon</span>
+                        <span class="fw-semibold" id="pvNama">@(string.IsNullOrEmpty(Model.Nama) ? "Nama" : Model.Nama)</span>
+                        <span class="text-muted" style="font-size:.75rem" id="pvHint"></span>
+                    </div>
+                    <hr />
+                    <ul class="mb-0 ps-3">
+                        <li>Sesi tidak diselesaikan sampai batas jam → "Tidak diselesaikan".</li>
+                        <li>Berat badan hanya disimpan untuk jenis yang mewajibkannya.</li>
+                        <li>Jarak GPS dihitung ulang di server dari titik mentah HP (akurasi ≤ 50 m).</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            var gps = document.getElementById('PakaiGps');
+            var berat = document.getElementById('WajibBerat');
+            var speed = document.getElementById('speedGroup');
+            var ikon = document.getElementById('Ikon');
+            var nama = document.getElementById('Nama');
+            function apply() {
+                speed.classList.toggle('d-none', !gps.checked);
+                document.getElementById('pvIkon').textContent = ikon.value || '🏅';
+                document.getElementById('pvNama').textContent = nama.value || 'Nama';
+                document.getElementById('pvHint').textContent = gps.checked ? '📡 Jarak GPS' : berat.checked ? '⚖️ Isi berat badan' : '⏱️ Catat durasi';
+            }
+            [gps, berat, ikon, nama].forEach(function (el) { el.addEventListener('input', apply); el.addEventListener('change', apply); });
+            apply();
+        })();
+    </script>
+}
