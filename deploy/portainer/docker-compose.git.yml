@@ -1,0 +1,59 @@
+# Stack Portainer FIT TO WORK (AKP Sehat) untuk metode "Repository" (Git). TANPA rahasia: nilai ${...} diisi di Portainer > Environment variables.
+# Aplikasi ini TIDAK memakai login Portal; login memakai NIP / akun admin sendiri.
+# Database: SQL Server yang SUDAH ADA (container "mssql2022"). Stack ini tidak membuat database baru dan tidak menyentuh datanya.
+# Wajib diisi: DB_PASSWORD. Biasanya juga HRIS_API_TOKEN (token sama dengan HRIS_API_TOKEN di stack HRIS).
+services:
+  fittowork:
+    image: ghcr.io/eddyyucca/akp-fittowork:${FTW_TAG:-latest}
+    pull_policy: always                 # selalu tarik image terbaru dari ghcr (Re-pull image di Portainer CE tidak tersedia)
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=${DB_SERVER:-mssql2022,1433};Database=${DB_NAME:-FitToWorkDb};User Id=${DB_USER:-sa};Password=${DB_PASSWORD};TrustServerCertificate=True;"
+      # Sinkron karyawan dari HRIS (REST API, baca-saja). HRIS berjalan di server yang sama, port HRIS_PORT di server (8101).
+      HRIS_API_URL: "${HRIS_API_URL:-http://host.docker.internal:8101}"
+      HRIS_API_TOKEN: "${HRIS_API_TOKEN:-}"
+      # Sinkron otomatis tiap sekian menit (0 = mati). Tombol "Sinkron Sekarang" di menu admin tetap ada.
+      HRIS_SYNC_INTERVAL_MINUTES: "${HRIS_SYNC_INTERVAL_MINUTES:-60}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # Hanya dari server ini sendiri (cloudflared). Dari LAN / internet wajib lewat Cloudflare Tunnel.
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      # Nama volume SAMA dengan yang dipakai docker-compose.production.yml lama, supaya lampiran dan kunci login tidak hilang.
+      - fittowork-uploads:/app/App_Data/uploads
+      - fittowork-keys:/app/App_Data/keys
+    networks:
+      - appprod-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/Account/EmployeeLogin"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  fittowork-uploads:
+    name: fittowork-uploads
+    external: true
+  fittowork-keys:
+    name: fittowork-keys
+    external: true
+
+networks:
+  appprod-net:
+    name: ${DB_NETWORK:-appprod-net}
+    external: true                      # network SQL Server "mssql2022" yang sudah ada; jangan membuat yang baru
