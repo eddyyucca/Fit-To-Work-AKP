@@ -1,0 +1,220 @@
+@using Microsoft.AspNetCore.Html
+@using FitToWorkApp.Models
+@using FitToWorkApp.Models.ViewModels
+@model FtwFollowUpViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Tindak Lanjut Tidak Fit";
+    Layout = "_AdminLayout";
+
+    var today = Clock.Today;
+    string F(DateTime d) => d.ToString("yyyy-MM-dd");
+    string Lbl(DateTime d) => d.ToString("dd/MM/yyyy");
+
+    // Nomor HP -> tautan WhatsApp (08xx -> 628xx). Hanya tautan; tidak ada pesan yang dikirim otomatis.
+    string? Wa(string? hp)
+    {
+        var digits = new string((hp ?? "").Where(char.IsDigit).ToArray());
+        if (digits.Length < 8) return null;
+        if (digits.StartsWith("0")) digits = "62" + digits[1..];
+        return "https://wa.me/" + digits;
+    }
+
+    IHtmlContent Badge(FtwFollowUpRow r)
+    {
+        return r.StatusKode switch
+        {
+            "klinik" => new HtmlString("<span class=\"badge bg-success\">Sudah ditangani klinik</span>"),
+            "isiulang" => new HtmlString("<span class=\"badge bg-info text-dark\">Mengisi ulang: FIT</span>"),
+            _ => r.Prioritas
+                ? new HtmlString("<span class=\"badge bg-danger\">Belum &middot; prioritas</span>")
+                : new HtmlString("<span class=\"badge bg-warning text-dark\">Belum ada tindak lanjut</span>")
+        };
+    }
+
+    var statusOptions = new[] { ("all", "Semua status"), ("belum", "Belum ada tindak lanjut"), ("isiulang", "Mengisi ulang: FIT"), ("klinik", "Sudah ditangani klinik") };
+}
+
+<style>
+    .rpt-table td, .rpt-table th { font-size: .84rem; vertical-align: middle; }
+    @@media print {
+        .app-sidebar, .app-header, .app-footer, .no-print, .sidebar-overlay { display: none !important; }
+        .app-main, .app-wrapper { margin: 0 !important; padding: 0 !important; }
+    }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Tindak Lanjut Karyawan Tidak Fit</h4>
+        <div class="text-muted small">
+            Periode <strong>@Lbl(Model.From) &ndash; @Lbl(Model.To)</strong>
+            @if (Model.Department is not null) { <text> &middot; Department <strong>@Model.Department</strong></text> }
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 no-print">
+        <a class="btn btn-outline-primary btn-sm" asp-action="Index" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department">&#128202; Laporan Fit To Work</a>
+        <a class="btn btn-success btn-sm" asp-action="ExportFollowUps" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department" asp-route-status="@Model.Status">&#128229; Download Excel</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">&#128424; Cetak</button>
+    </div>
+</div>
+
+<div class="card shadow-sm no-print">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="from">Dari tanggal</label>
+                <input type="date" id="from" name="from" class="form-control form-control-sm" value="@F(Model.From)" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="to">Sampai tanggal</label>
+                <input type="date" id="to" name="to" class="form-control form-control-sm" value="@F(Model.To)" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="department">Department</label>
+                <select id="department" name="department" class="form-select form-select-sm">
+                    <option value="">Semua department</option>
+                    @foreach (var d in Model.Departments)
+                    {
+                        <option value="@d" selected="@(string.Equals(d, Model.Department, StringComparison.OrdinalIgnoreCase))">@d</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="status">Status tindak lanjut</label>
+                <select id="status" name="status" class="form-select form-select-sm">
+                    @foreach (var (val, text) in statusOptions)
+                    {
+                        <option value="@val" selected="@(Model.Status == val)">@text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary btn-sm">Tampilkan</button></div>
+            <div class="col-12 d-flex flex-wrap gap-1">
+                <a class="btn btn-outline-secondary btn-sm" asp-action="FollowUps" asp-route-from="@F(today)" asp-route-to="@F(today)" asp-route-department="@Model.Department">Hari ini</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="FollowUps" asp-route-from="@F(today.AddDays(-1))" asp-route-to="@F(today)" asp-route-department="@Model.Department">2 hari</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="FollowUps" asp-route-from="@F(today.AddDays(-6))" asp-route-to="@F(today)" asp-route-department="@Model.Department">7 hari</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="FollowUps" asp-route-from="@F(today.AddDays(-29))" asp-route-to="@F(today)" asp-route-department="@Model.Department">30 hari</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-2 mt-1 mb-3">
+    @foreach (var k in new[]
+    {
+        (Nama: "Kejadian tidak fit", Nilai: Model.Kejadian, Cls: ""),
+        (Nama: "Karyawan", Nilai: Model.KaryawanUnik, Cls: ""),
+        (Nama: "Belum ada tindak lanjut", Nilai: Model.Belum, Cls: Model.Belum > 0 ? "text-danger" : ""),
+        (Nama: "…prioritas (berulang)", Nilai: Model.BelumPrioritas, Cls: Model.BelumPrioritas > 0 ? "text-danger" : ""),
+        (Nama: "Mengisi ulang: FIT", Nilai: Model.IsiUlang, Cls: "text-info"),
+        (Nama: "Ditangani klinik", Nilai: Model.Klinik, Cls: "text-success")
+    })
+    {
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card shadow-sm h-100"><div class="card-body py-2">
+                <div class="text-muted small">@k.Nama</div>
+                <div class="fs-3 fw-bold lh-1 @k.Cls">@k.Nilai</div>
+            </div></div>
+        </div>
+    }
+</div>
+
+<div class="text-muted small mb-2">
+    Setiap pengisian berstatus <strong>tidak fit</strong> dihitung sebagai satu kejadian.
+    Status tindak lanjut diturunkan dari data yang sudah ada:
+    @if (Model.CanSeeClinic)
+    {
+        <text><strong>Sudah ditangani klinik</strong> = ada kunjungan klinik dalam 48 jam setelah mengisi; </text>
+    }
+    else
+    {
+        <text>(kunjungan klinik tidak ditampilkan karena akun ini tidak punya izin Kunjungan Klinik, jadi kejadian yang sudah ditangani klinik tetap tampil &ldquo;Belum ada tindak lanjut&rdquo;); </text>
+    }
+    <strong>Mengisi ulang: FIT</strong> = mengisi ulang dan berstatus FIT dalam 24 jam;
+    <strong>Prioritas</strong> = belum ada tindak lanjut dan sudah tidak fit 2 hari atau lebih dalam 7 hari terakhir.
+    Halaman ini tidak mencatat tindak lanjut baru.
+</div>
+
+@if (Model.Truncated)
+{
+    <div class="alert alert-warning py-1 small">Hasil dibatasi pada 1000 kejadian terbaru. Persempit rentang tanggal atau pilih department untuk melihat semuanya.</div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-semibold">@Model.Rows.Count kejadian ditampilkan</span>
+        <input type="search" id="q" class="form-control form-control-sm no-print" style="max-width: 260px" placeholder="Cari nama / NIP / gejala..." />
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped rpt-table mb-0" id="tbl">
+                <thead class="table-light">
+                    <tr>
+                        <th>Status</th><th>Waktu</th><th>NIP</th><th>Nama</th><th>Department / Section</th><th>Kontak</th><th>Gejala &amp; kondisi</th>
+                        <th class="text-end">7 hari</th>
+                        @if (Model.CanSeeClinic) { <th>Klinik</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        var wa = Wa(r.NomorHp);
+                        <tr>
+                            <td>
+                                @Badge(r)
+                                @if (r.StatusKode == "belum") { <div class="small text-muted">@(r.JamTerbuka < 24 ? r.JamTerbuka + " jam lalu" : (r.JamTerbuka / 24) + " hari lalu")</div> }
+                            </td>
+                            <td class="text-nowrap">@Clock.ToLocal(r.WaktuUtc).ToString("dd/MM/yyyy HH:mm")<div class="small text-muted">@r.JadwalKerja</div></td>
+                            <td>@r.NIP</td>
+                            <td>@r.Nama</td>
+                            <td>@r.Department<div class="small text-muted">@r.Section</div></td>
+                            <td class="text-nowrap">
+                                @if (!string.IsNullOrWhiteSpace(r.NomorHp))
+                                {
+                                    <span>@r.NomorHp</span>
+                                    @if (wa is not null) { <a class="ms-1 no-print" href="@wa" target="_blank" rel="noopener" title="Buka WhatsApp">&#128172;</a> }
+                                }
+                                else { <span class="text-muted">-</span> }
+                            </td>
+                            <td style="min-width: 240px">
+                                <div>@r.GejalaKesehatan</div>
+                                <div class="small text-muted">Tidur @r.JamTidur &middot; @r.KualitasTidur &middot; Fokus: @r.KondisiFokus &middot; Obat: @r.KonsumsiObat</div>
+                            </td>
+                            <td class="text-end @(r.TidakFit7Hari >= 2 ? "text-danger fw-semibold" : "")">@r.TidakFit7Hari hari</td>
+                            @if (Model.CanSeeClinic)
+                            {
+                                <td class="small">
+                                    @if (r.KlinikUtc is DateTime kv)
+                                    {
+                                        <div>@Clock.ToLocal(kv).ToString("dd/MM HH:mm")</div>
+                                        <div class="text-muted">@(r.KlinikRekomendasi is null ? "" : RecommendationTypes.Label(r.KlinikRekomendasi))@(r.KlinikHariIstirahat is int hi && hi > 0 ? $" ({hi} hari)" : "")</div>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                            }
+                        </tr>
+                    }
+                    @if (Model.Rows.Count == 0)
+                    {
+                        <tr><td colspan="@(Model.CanSeeClinic ? 9 : 8)" class="text-center text-muted py-4">Tidak ada kejadian tidak fit pada periode ini.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="text-muted small mt-3 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Halaman ini hanya membaca data; tidak mengubah data apa pun.</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var q = document.getElementById('q'), rows = document.querySelectorAll('#tbl tbody tr');
+            if (!q) return;
+            q.addEventListener('input', function () {
+                var t = q.value.trim().toLowerCase();
+                rows.forEach(function (tr) { tr.style.display = !t || tr.textContent.toLowerCase().indexOf(t) >= 0 ? '' : 'none'; });
+            });
+        })();
+    </script>
+}

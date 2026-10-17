@@ -1,0 +1,367 @@
+@using Microsoft.AspNetCore.Html
+@using FitToWorkApp.Models.ViewModels
+@model FtwReportViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Laporan Fit To Work";
+    Layout = "_AdminLayout";
+
+    var today = Clock.Today;
+    var monthStart = new DateTime(today.Year, today.Month, 1);
+    var lastMonthStart = monthStart.AddMonths(-1);
+    var lastMonthEnd = monthStart.AddDays(-1);
+
+    string F(DateTime d) => d.ToString("yyyy-MM-dd");
+    string Lbl(DateTime d) => d.ToString("dd/MM/yyyy");
+
+    // Warna kepatuhan: >= 90% hijau, 70-89% kuning, di bawah itu merah
+    IHtmlContent Pct(decimal? p)
+    {
+        if (p is null) return new HtmlString("<span class=\"text-muted\">-</span>");
+        var cls = p >= 90 ? "bg-success" : p >= 70 ? "bg-warning text-dark" : "bg-danger";
+        return new HtmlString($"<span class=\"badge {cls}\">{p:0.#}%</span>");
+    }
+    IHtmlContent KatBadge(string k)
+    {
+        var cls = k switch { "Tertib" => "bg-success", "Cukup" => "bg-warning text-dark", "Kurang" => "bg-danger", "Tidak pernah" => "bg-dark", _ => "bg-secondary" };
+        return new HtmlString($"<span class=\"badge {cls}\">{k}</span>");
+    }
+
+    var totalPengisian = Model.TotalPengisian;
+    var fitPersen = totalPengisian > 0 ? Model.TotalFit * 100m / totalPengisian : (decimal?)null;
+    var noData = Model.HariOperasional == 0;
+    var worstDept = Model.ByDepartment.Where(d => d.Persen is not null).Take(10).ToList();
+}
+
+<style>
+    .rpt-table td, .rpt-table th { font-size: .85rem; }
+    .rpt-chart { position: relative; height: 270px; }
+    .rpt-section { margin-top: 2rem; }
+    @@media print {
+        .app-sidebar, .app-header, .app-footer, .no-print, .sidebar-overlay { display: none !important; }
+        .app-main, .app-wrapper { margin: 0 !important; padding: 0 !important; }
+        .card { break-inside: avoid; box-shadow: none !important; }
+    }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Laporan Fit To Work</h4>
+        <div class="text-muted small">
+            Periode <strong>@Lbl(Model.From) &ndash; @Lbl(Model.To)</strong> (@Model.Days hari)
+            @if (Model.Department is not null) { <text> &middot; Department <strong>@Model.Department</strong></text> }
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 no-print">
+        <a class="btn btn-outline-danger btn-sm" asp-action="FollowUps" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department">&#9888; Tindak lanjut tidak fit</a>
+        <a class="btn btn-success btn-sm" asp-action="Export" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department">&#128229; Download Excel</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">&#128424; Cetak / Simpan PDF</button>
+    </div>
+</div>
+
+<div class="card shadow-sm no-print">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="from">Dari tanggal</label>
+                <input type="date" id="from" name="from" class="form-control form-control-sm" value="@F(Model.From)" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="to">Sampai tanggal</label>
+                <input type="date" id="to" name="to" class="form-control form-control-sm" value="@F(Model.To)" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="department">Department</label>
+                <select id="department" name="department" class="form-select form-select-sm">
+                    <option value="">Semua department</option>
+                    @foreach (var d in Model.Departments)
+                    {
+                        <option value="@d" selected="@(string.Equals(d, Model.Department, StringComparison.OrdinalIgnoreCase))">@d</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary btn-sm">Tampilkan</button></div>
+            <div class="col-12 col-md d-flex flex-wrap gap-1 justify-content-md-end">
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(today.AddDays(-6))" asp-route-to="@F(today)" asp-route-department="@Model.Department">7 hari</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(monthStart)" asp-route-to="@F(today)" asp-route-department="@Model.Department">Bulan ini</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(lastMonthStart)" asp-route-to="@F(lastMonthEnd)" asp-route-department="@Model.Department">Bulan lalu</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(today.AddDays(-29))" asp-route-to="@F(today)" asp-route-department="@Model.Department">30 hari</a>
+            </div>
+        </form>
+        @if (Model.RangeWasClamped)
+        {
+            <div class="alert alert-warning py-1 small mt-2 mb-0">Rentang dibatasi maksimal @Model.RangeDayLimit hari; tanggal awal disesuaikan.</div>
+        }
+    </div>
+</div>
+
+@if (noData)
+{
+    <div class="alert alert-info mt-3">Belum ada pengisian Fit To Work pada periode ini, jadi laporan kepatuhan belum bisa dihitung.</div>
+}
+
+<!-- =============================== RINGKASAN =============================== -->
+<div class="row g-2 mt-1 mb-3">
+    @foreach (var k in new[]
+    {
+        (Nama: "Karyawan aktif (AKP)", Nilai: Model.KaryawanAktif.ToString(), Cls: ""),
+        (Nama: "Hari operasional", Nilai: Model.HariOperasional.ToString(), Cls: ""),
+        (Nama: "Kepatuhan rata-rata", Nilai: Model.KepatuhanPersen is decimal kp ? kp.ToString("0.#") + "%" : "-", Cls: Model.KepatuhanPersen >= 90 ? "text-success" : Model.KepatuhanPersen >= 70 ? "text-warning" : "text-danger"),
+        (Nama: "Pengisian (karyawan-hari)", Nilai: Model.TotalPengisian.ToString(), Cls: ""),
+        (Nama: "Fit", Nilai: fitPersen is decimal fp ? $"{Model.TotalFit} ({fp:0.#}%)" : "-", Cls: "text-success"),
+        (Nama: "Tidak fit", Nilai: Model.TotalTidakFit.ToString(), Cls: Model.TotalTidakFit > 0 ? "text-danger" : ""),
+        (Nama: "Tidak pernah mengisi", Nilai: Model.JumlahTidakPernah.ToString(), Cls: Model.JumlahTidakPernah > 0 ? "text-danger" : "")
+    })
+    {
+        <div class="col-6 col-md-4 col-xl">
+            <div class="card shadow-sm h-100"><div class="card-body py-2">
+                <div class="text-muted small">@k.Nama</div>
+                <div class="fs-4 fw-bold lh-1 @k.Cls">@k.Nilai</div>
+            </div></div>
+        </div>
+    }
+</div>
+<div class="text-muted small">
+    Kepatuhan = hari terisi &divide; hari wajib. Hari wajib = hari operasional (tanggal yang ada minimal 1 pengisian) sejak karyawan terdaftar.
+    Cuti, libur individu, dan jadwal shift tidak diperhitungkan, jadi karyawan yang sedang tidak bekerja akan tampak kurang patuh.
+    Satu karyawan dihitung 1x per hari; kalau mengisi ulang, status terakhir yang dipakai.
+</div>
+
+<!-- =============================== TREN =============================== -->
+<div class="rpt-section">
+    <h5 class="mb-2"><i class="bi bi-graph-up me-1"></i>Pengisian harian</h5>
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Fit &amp; tidak fit per hari, dan kepatuhan (%)</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chDaily"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Kepatuhan menurut hari</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chWeekday"></canvas></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== DEPARTMENT & SECTION =============================== -->
+<div class="rpt-section">
+    <h5 class="mb-1"><i class="bi bi-building me-1"></i>Department yang jarang mengisi</h5>
+    <div class="text-muted small mb-2">Diurutkan dari kepatuhan terendah. &ldquo;Kurang&rdquo; = karyawan dengan kepatuhan di bawah 70% (termasuk yang tidak pernah mengisi).</div>
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">10 department dengan kepatuhan terendah</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chDept"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 360px; overflow:auto">
+                        <table class="table table-sm table-striped rpt-table mb-0">
+                            <thead class="table-light" style="position: sticky; top: 0"><tr><th>Department</th><th class="text-end">Karyawan</th><th class="text-end">Kepatuhan</th><th class="text-end">Tidak pernah</th><th class="text-end">Kurang</th><th class="text-end">Tidak fit</th></tr></thead>
+                            <tbody>
+                                @foreach (var g in Model.ByDepartment)
+                                {
+                                    <tr>
+                                        <td>@g.Nama</td><td class="text-end">@g.Karyawan</td><td class="text-end">@Pct(g.Persen)</td>
+                                        <td class="text-end">@g.TidakPernah</td><td class="text-end">@g.Kurang</td>
+                                        <td class="text-end">@(g.PersenTidakFit is decimal tf ? tf.ToString("0.#") + "%" : "-")</td>
+                                    </tr>
+                                }
+                                @if (Model.ByDepartment.Count == 0) { <tr><td colspan="6" class="text-center text-muted">Tidak ada data.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">Kepatuhan per section <span class="text-muted fw-normal small">(terendah dulu)</span></div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 360px; overflow:auto">
+                <table class="table table-sm table-striped rpt-table mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0"><tr><th>Section</th><th class="text-end">Karyawan</th><th class="text-end">Kepatuhan</th><th class="text-end">Tidak pernah</th><th class="text-end">Kurang</th><th class="text-end">Tidak fit</th></tr></thead>
+                    <tbody>
+                        @foreach (var g in Model.BySection)
+                        {
+                            <tr>
+                                <td>@g.Nama</td><td class="text-end">@g.Karyawan</td><td class="text-end">@Pct(g.Persen)</td>
+                                <td class="text-end">@g.TidakPernah</td><td class="text-end">@g.Kurang</td>
+                                <td class="text-end">@(g.PersenTidakFit is decimal tf2 ? tf2.ToString("0.#") + "%" : "-")</td>
+                            </tr>
+                        }
+                        @if (Model.BySection.Count == 0) { <tr><td colspan="6" class="text-center text-muted">Tidak ada data.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== KETERTIBAN KARYAWAN =============================== -->
+<div class="rpt-section">
+    <h5 class="mb-1"><i class="bi bi-person-check me-1"></i>Ketertiban karyawan mengisi</h5>
+    <div class="text-muted small mb-2">Tertib &ge; 90% &middot; Cukup 70&ndash;89% &middot; Kurang &lt; 70% &middot; Tidak pernah = tidak ada pengisian sama sekali pada periode ini.</div>
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Sebaran ketertiban</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chKetertiban"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Karyawan paling jarang mengisi <span class="text-muted fw-normal small">(maks. @Model.LowCompliance.Count tampil; daftar lengkap ada di Excel)</span></div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px; overflow:auto">
+                        <table class="table table-sm table-striped rpt-table mb-0">
+                            <thead class="table-light" style="position: sticky; top: 0"><tr><th>NIP</th><th>Nama</th><th>Department</th><th class="text-end">Terisi</th><th class="text-end">Kepatuhan</th><th>Terakhir mengisi</th><th class="text-end">Belum mengisi</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in Model.LowCompliance)
+                                {
+                                    <tr>
+                                        <td>@e.NIP</td><td>@e.Nama</td><td>@e.Department</td>
+                                        <td class="text-end">@e.HariIsi / @e.HariWajib</td>
+                                        <td class="text-end">@KatBadge(e.Kategori) @Pct(e.Persen)</td>
+                                        <td>@(e.TerakhirUtc is DateTime t ? Clock.ToLocal(t).ToString("dd/MM/yyyy HH:mm") : "-")</td>
+                                        <td class="text-end">@e.BelumIsiBerturut hari</td>
+                                    </tr>
+                                }
+                                @if (Model.LowCompliance.Count == 0) { <tr><td colspan="7" class="text-center text-muted">Tidak ada karyawan dengan kepatuhan rendah.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== HASIL FIT TO WORK =============================== -->
+<div class="rpt-section">
+    <h5 class="mb-1"><i class="bi bi-clipboard2-pulse me-1"></i>Hasil Fit To Work</h5>
+    <div class="text-muted small mb-2">Gejala, kualitas tidur, fokus, dan konsumsi obat hanya ditanyakan kepada yang tidak fit.</div>
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Per jadwal kerja</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped rpt-table mb-0">
+                        <thead><tr><th>Jadwal</th><th class="text-end">Fit</th><th class="text-end">Tidak fit</th><th class="text-end">Tidak fit (%)</th></tr></thead>
+                        <tbody>
+                            @foreach (var j in Model.ByJadwal)
+                            {
+                                <tr><td>@j.Nama</td><td class="text-end">@j.Fit</td><td class="text-end">@j.TidakFit</td><td class="text-end">@(j.PersenTidakFit?.ToString("0.#") ?? "-")%</td></tr>
+                            }
+                            @if (Model.ByJadwal.Count == 0) { <tr><td colspan="4" class="text-center text-muted">Tidak ada data.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Jam tidur dan status <span class="text-muted fw-normal small">(tidur kurang = lebih sering tidak fit?)</span></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped rpt-table mb-0">
+                        <thead><tr><th>Jam tidur</th><th class="text-end">Fit</th><th class="text-end">Tidak fit</th><th class="text-end">Tidak fit (%)</th></tr></thead>
+                        <tbody>
+                            @foreach (var j in Model.ByJamTidur)
+                            {
+                                <tr><td>@j.Nama</td><td class="text-end">@j.Fit</td><td class="text-end">@j.TidakFit</td><td class="text-end">@(j.PersenTidakFit?.ToString("0.#") ?? "-")%</td></tr>
+                            }
+                            @if (Model.ByJamTidur.Count == 0) { <tr><td colspan="4" class="text-center text-muted">Tidak ada data.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-0">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 mt-3">
+                <div class="card-header fw-semibold">Gejala yang dirasakan (yang tidak fit)</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chGejala"></canvas></div></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 mt-3">
+                <div class="card-header fw-semibold">Kualitas tidur, fokus, dan konsumsi obat (yang tidak fit)</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm rpt-table mb-0">
+                        <thead><tr><th colspan="2">Kualitas tidur</th></tr></thead>
+                        <tbody>@foreach (var x in Model.Kualitas) { <tr><td>@x.Nama</td><td class="text-end">@x.Jumlah</td></tr> }
+                            @if (Model.Kualitas.Count == 0) { <tr><td colspan="2" class="text-muted">-</td></tr> }</tbody>
+                        <thead><tr><th colspan="2">Kondisi fokus &amp; pikiran</th></tr></thead>
+                        <tbody>@foreach (var x in Model.Fokus) { <tr><td>@x.Nama</td><td class="text-end">@x.Jumlah</td></tr> }
+                            @if (Model.Fokus.Count == 0) { <tr><td colspan="2" class="text-muted">-</td></tr> }</tbody>
+                        <thead><tr><th colspan="2">Konsumsi obat (12 jam terakhir)</th></tr></thead>
+                        <tbody>@foreach (var x in Model.Obat) { <tr><td>@x.Nama</td><td class="text-end">@x.Jumlah</td></tr> }
+                            @if (Model.Obat.Count == 0) { <tr><td colspan="2" class="text-muted">-</td></tr> }</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">Karyawan yang sering tidak fit <span class="text-muted fw-normal small">(3 hari atau lebih pada periode ini)</span></div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped rpt-table mb-0">
+                    <thead><tr><th>NIP</th><th>Nama</th><th>Department</th><th class="text-end">Hari terisi</th><th class="text-end">Hari tidak fit</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in Model.FrequentUnfit)
+                        {
+                            <tr><td>@e.NIP</td><td>@e.Nama</td><td>@e.Department</td><td class="text-end">@e.HariIsi</td><td class="text-end text-danger fw-semibold">@e.HariTidakFit</td></tr>
+                        }
+                        @if (Model.FrequentUnfit.Count == 0) { <tr><td colspan="5" class="text-center text-muted">Tidak ada.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-muted small mt-4 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Laporan ini hanya membaca data; tidak mengubah data apa pun.</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+    <script>
+        (function () {
+            if (typeof Chart === 'undefined') return;
+            function mk(id, cfg) { var el = document.getElementById(id); if (el) new Chart(el, cfg); }
+
+            var daily = @Json.Serialize(Model.Daily.Select(d => new { label = d.Tanggal.ToString("dd/MM"), fit = d.Fit, tidakFit = d.TidakFit, persen = d.Persen }));
+            mk('chDaily', { data: { labels: daily.map(function (x) { return x.label; }), datasets: [
+                { type: 'bar', label: 'Fit', data: daily.map(function (x) { return x.fit; }), backgroundColor: '#198754', stack: 's', yAxisID: 'y' },
+                { type: 'bar', label: 'Tidak fit', data: daily.map(function (x) { return x.tidakFit; }), backgroundColor: '#dc3545', stack: 's', yAxisID: 'y' },
+                { type: 'line', label: 'Kepatuhan (%)', data: daily.map(function (x) { return x.persen; }), borderColor: '#0d6efd', backgroundColor: '#0d6efd', yAxisID: 'y1', tension: .25, pointRadius: daily.length > 45 ? 0 : 3 }
+            ] }, options: { maintainAspectRatio: false, scales: { y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } } } } });
+
+            var wk = @Json.Serialize(Model.Weekday.Select(w => new { hari = w.Hari, persen = w.Persen }));
+            mk('chWeekday', { type: 'bar', data: { labels: wk.map(function (x) { return x.hari; }), datasets: [{ label: 'Kepatuhan (%)', data: wk.map(function (x) { return x.persen; }), backgroundColor: '#0d6efd' }] },
+                options: { plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } } });
+
+            var dept = @Json.Serialize(worstDept.Select(d => new { nama = d.Nama, persen = d.Persen }));
+            mk('chDept', { type: 'bar', data: { labels: dept.map(function (x) { return x.nama; }), datasets: [{ label: 'Kepatuhan (%)', data: dept.map(function (x) { return x.persen; }),
+                backgroundColor: dept.map(function (x) { return x.persen >= 90 ? '#198754' : x.persen >= 70 ? '#ffc107' : '#dc3545'; }) }] },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { x: { beginAtZero: true, max: 100 } } } });
+
+            mk('chKetertiban', { type: 'doughnut', data: { labels: ['Tertib', 'Cukup', 'Kurang', 'Tidak pernah'],
+                datasets: [{ data: [@Model.JumlahTertib, @Model.JumlahCukup, @Model.JumlahKurang, @Model.JumlahTidakPernah], backgroundColor: ['#198754', '#ffc107', '#dc3545', '#343a40'] }] },
+                options: { maintainAspectRatio: false } });
+
+            var gej = @Json.Serialize(Model.Gejala.Take(10).Select(g => new { nama = g.Nama, jumlah = g.Jumlah }));
+            mk('chGejala', { type: 'bar', data: { labels: gej.map(function (x) { return x.nama; }), datasets: [{ data: gej.map(function (x) { return x.jumlah; }), backgroundColor: '#fd7e14' }] },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+        })();
+    </script>
+}

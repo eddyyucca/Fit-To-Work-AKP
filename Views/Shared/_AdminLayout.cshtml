@@ -102,8 +102,8 @@
                         }
                         @if (access.Has(Permissions.FtwHistory) || access.Has(Permissions.FtwSettings))
                         {
-                            <li class="nav-item @Open("History", "FtwSettings")">
-                                <a href="#" class="nav-link @Active("History", "FtwSettings")">
+                            <li class="nav-item @Open("History", "FtwSettings", "FtwReports")">
+                                <a href="#" class="nav-link @Active("History", "FtwSettings", "FtwReports")">
                                     <i class="nav-icon bi bi-clipboard2-check"></i>
                                     <p>Fit To Work<i class="nav-arrow bi bi-chevron-right"></i></p>
                                 </a>
@@ -113,6 +113,16 @@
                                         <li class="nav-item">
                                             <a class="nav-link @Active("History")" asp-area="" asp-controller="History" asp-action="Index">
                                                 <i class="nav-icon bi bi-circle"></i><p>Riwayat Pengisian</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @ActiveAction("FtwReports", "Index", "Export")" asp-area="" asp-controller="FtwReports" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Laporan Fit To Work</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @ActiveAction("FtwReports", "FollowUps", "ExportFollowUps")" asp-area="" asp-controller="FtwReports" asp-action="FollowUps">
+                                                <i class="nav-icon bi bi-circle"></i><p>Tindak Lanjut Tidak Fit</p>
                                             </a>
                                         </li>
                                     }
