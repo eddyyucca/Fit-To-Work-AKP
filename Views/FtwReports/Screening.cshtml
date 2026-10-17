@@ -1,0 +1,161 @@
+@using FitToWorkApp.Models.ViewModels
+@model FtwScreeningViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Screening FTW & Pemeriksaan";
+    Layout = "_AdminLayout";
+
+    var today = Clock.Today;
+    string F(DateTime d) => d.ToString("yyyy-MM-dd");
+    string Lbl(DateTime d) => d.ToString("dd/MM/yyyy");
+    var clinic = Model.CanSeeClinic;
+}
+
+<style>
+    .scr-table { font-size: .82rem; border-collapse: collapse; width: 100%; }
+    .scr-table th, .scr-table td { border: 1px solid #adb5bd; padding: .35rem .45rem; vertical-align: middle; text-align: center; }
+    .scr-table thead th { background: #9BC2E6; font-weight: 700; }
+    .scr-table td.res { background: #F2F2F2; }
+    .scr-table td.pre { white-space: pre-line; }
+    @@media print {
+        .app-sidebar, .app-header, .app-footer, .no-print, .sidebar-overlay { display: none !important; }
+        .app-main, .app-wrapper { margin: 0 !important; padding: 0 !important; }
+        .scr-table { font-size: .7rem; }
+        .card { box-shadow: none !important; border: 0 !important; }
+        @@page { size: A4 landscape; margin: 10mm; }
+    }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Hasil Screening FTW@(clinic ? " & Pemeriksaan" : "")</h4>
+        <div class="text-muted small">
+            Periode <strong>@Lbl(Model.From) &ndash; @Lbl(Model.To)</strong>
+            @if (Model.Department is not null) { <text> &middot; Department <strong>@Model.Department</strong></text> }
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 no-print">
+        <a class="btn btn-outline-primary btn-sm" asp-action="Index" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department">&#128202; Laporan Fit To Work</a>
+        <a class="btn btn-success btn-sm" asp-action="ExportScreening" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department" asp-route-scope="@Model.Scope">&#128229; Download Excel</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">&#128424; Cetak / Simpan PDF</button>
+    </div>
+</div>
+
+<div class="card shadow-sm no-print">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="from">Dari tanggal</label>
+                <input type="date" id="from" name="from" class="form-control form-control-sm" value="@F(Model.From)" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="to">Sampai tanggal</label>
+                <input type="date" id="to" name="to" class="form-control form-control-sm" value="@F(Model.To)" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="department">Department</label>
+                <select id="department" name="department" class="form-select form-select-sm">
+                    <option value="">Semua department</option>
+                    @foreach (var d in Model.Departments)
+                    {
+                        <option value="@d" selected="@(string.Equals(d, Model.Department, StringComparison.OrdinalIgnoreCase))">@d</option>
+                    }
+                </select>
+            </div>
+            @if (clinic)
+            {
+                <div class="col-12 col-md-3">
+                    <label class="form-label small mb-1" for="scope">Tampilkan</label>
+                    <select id="scope" name="scope" class="form-select form-select-sm">
+                        <option value="all" selected="@(Model.Scope == "all")">Semua yang tidak fit</option>
+                        <option value="diperiksa" selected="@(Model.Scope == "diperiksa")">Hanya yang sudah diperiksa klinik</option>
+                    </select>
+                </div>
+            }
+            <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary btn-sm">Tampilkan</button></div>
+            <div class="col-12 d-flex flex-wrap gap-1">
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Screening" asp-route-from="@F(today)" asp-route-to="@F(today)" asp-route-department="@Model.Department" asp-route-scope="@Model.Scope">Hari ini</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Screening" asp-route-from="@F(today.AddDays(-6))" asp-route-to="@F(today)" asp-route-department="@Model.Department" asp-route-scope="@Model.Scope">7 hari</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Screening" asp-route-from="@F(new DateTime(today.Year, today.Month, 1))" asp-route-to="@F(today)" asp-route-department="@Model.Department" asp-route-scope="@Model.Scope">Bulan ini</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="text-muted small my-2">
+    Satu baris = satu karyawan tidak fit pada satu hari (pengisian tidak fit terakhir hari itu).
+    @if (clinic)
+    {
+        <text>Hasil Pemeriksaan, Tindakan, dan Rekomendasi diambil dari kunjungan klinik dalam 48 jam setelah mengisi: <strong>hasil pemeriksaan</strong> = diagnosa dan hasil pemeriksaan, <strong>tindakan</strong> = obat dan catatan klinik, <strong>rekomendasi</strong> = rekomendasi klinik. Kosong berarti belum ada kunjungan klinik.
+        <strong>@Model.Diperiksa</strong> dari <strong>@Model.Total</strong> kejadian sudah diperiksa.</text>
+    }
+    else
+    {
+        <text>Kolom hasil pemeriksaan klinik tidak ditampilkan karena akun ini tidak punya izin Kunjungan Klinik.</text>
+    }
+</div>
+
+@if (Model.Truncated)
+{
+    <div class="alert alert-warning py-1 small">Hasil dibatasi pada 1000 pengisian terbaru. Persempit rentang tanggal atau pilih department.</div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-2">
+        <div class="table-responsive">
+            <table class="scr-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2">NO</th>
+                        <th rowspan="2">TANGGAL</th>
+                        <th rowspan="2">NAMA</th>
+                        <th rowspan="2">SECTION</th>
+                        <th rowspan="2">JADWAL KERJA</th>
+                        <th rowspan="2">AREA KERJA</th>
+                        <th colspan="5">HASIL SCREENING FTW</th>
+                        @if (clinic)
+                        {
+                            <th rowspan="2">HASIL PEMERIKSAAN</th>
+                            <th rowspan="2">TINDAKAN</th>
+                            <th rowspan="2">REKOMENDASI</th>
+                        }
+                    </tr>
+                    <tr>
+                        <th>JUMLAH JAM TIDUR</th><th>KUALITAS TIDUR</th><th>GEJALA KESEHATAN</th><th>KONDISI FOKUS DAN PIKIRAN</th><th>KONSUMSI OBAT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var no = 1; }
+                    @foreach (var x in Model.Rows)
+                    {
+                        <tr>
+                            <td>@(no++)</td>
+                            <td class="text-nowrap">@Lbl(x.Tanggal)</td>
+                            <td>@x.Nama.ToUpperInvariant()</td>
+                            <td>@x.Section.ToUpperInvariant()</td>
+                            <td>@x.JadwalKerja</td>
+                            <td>@x.AreaKerja</td>
+                            <td>@x.JamTidur</td>
+                            <td>@x.KualitasTidur</td>
+                            <td>@x.GejalaKesehatan</td>
+                            <td>@x.KondisiFokus</td>
+                            <td>@x.KonsumsiObat</td>
+                            @if (clinic)
+                            {
+                                <td class="res pre">@x.HasilPemeriksaan</td>
+                                <td class="res pre">@x.Tindakan</td>
+                                <td class="res">@x.RekomendasiText</td>
+                            }
+                        </tr>
+                    }
+                    @if (Model.Rows.Count == 0)
+                    {
+                        <tr><td colspan="@(clinic ? 14 : 11)" class="text-muted py-4">Tidak ada karyawan tidak fit pada periode ini.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="text-muted small mt-3 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Halaman ini hanya membaca data; tidak mengubah data apa pun.</div>

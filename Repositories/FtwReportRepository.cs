@@ -24,6 +24,9 @@ namespace FitToWorkApp.Repositories
         Task<int> GetOperationalDaysAsync(FtwReportFilter f);
 
         Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max);
+
+        /// <summary>Pengisian tidak fit + jawaban screening + (opsional) hasil pemeriksaan klinik dalam 48 jam berikutnya.</summary>
+        Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max);
     }
 
     public class FtwReportRepository : IFtwReportRepository
@@ -164,6 +167,52 @@ namespace FitToWorkApp.Repositories
                 UNION ALL
                 SELECT 'Obat', sub.KonsumsiObat, COUNT(1) {unfitFrom} GROUP BY sub.KonsumsiObat";
             return ListAsync<FtwNameCountRow>(sql, P(f));
+        }
+
+        public Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max)
+        {
+            var clinicCols = includeClinic
+                ? "cv.VisitAt AS KlinikUtc, dg.Diagnosa, cv.Pemeriksaan, ob.Obat, cv.CatatanRekomendasi, cv.Rekomendasi, cv.HariIstirahat, cv.IstirahatDari, cv.IstirahatSampai"
+                : @"CAST(NULL AS DATETIME2) AS KlinikUtc, CAST(NULL AS NVARCHAR(MAX)) AS Diagnosa, CAST(NULL AS NVARCHAR(1000)) AS Pemeriksaan,
+                    CAST(NULL AS NVARCHAR(MAX)) AS Obat, CAST(NULL AS NVARCHAR(1000)) AS CatatanRekomendasi, CAST(NULL AS NVARCHAR(30)) AS Rekomendasi,
+                    CAST(NULL AS INT) AS HariIstirahat, CAST(NULL AS DATE) AS IstirahatDari, CAST(NULL AS DATE) AS IstirahatSampai";
+            var clinicApply = includeClinic
+                ? @"OUTER APPLY (
+                        SELECT TOP 1 v.Id, v.VisitAt, v.Pemeriksaan, v.Rekomendasi, v.HariIstirahat, v.IstirahatDari, v.IstirahatSampai, v.CatatanRekomendasi
+                        FROM dbo.ClinicVisits v
+                        WHERE v.EmployeeId = s.EmployeeId AND v.IsCancelled = 0
+                          AND v.VisitAt >= s.CreatedAt AND v.VisitAt < DATEADD(HOUR, 48, s.CreatedAt)
+                        ORDER BY v.VisitAt) cv
+                    OUTER APPLY (
+                        SELECT STRING_AGG(dz.Name, ', ') WITHIN GROUP (ORDER BY dz.Name) AS Diagnosa
+                        FROM dbo.ClinicVisitDiseases vd
+                        INNER JOIN dbo.Diseases dz ON dz.Id = vd.DiseaseId
+                        WHERE vd.ClinicVisitId = cv.Id) dg
+                    OUTER APPLY (
+                        SELECT STRING_AGG(CAST(m.NamaSnapshot + ' ' + CAST(m.Qty AS NVARCHAR(10)) + ' ' + m.SatuanSnapshot
+                                    + CASE WHEN m.AturanPakai IS NULL OR m.AturanPakai = '' THEN '' ELSE ' (' + m.AturanPakai + ')' END AS NVARCHAR(MAX)), '; ') AS Obat
+                        FROM dbo.ClinicVisitMedicines m
+                        WHERE m.ClinicVisitId = cv.Id) ob"
+                : "";
+
+            var sql = $@"
+                SELECT TOP (@Max)
+                       s.Id, s.EmployeeId, e.NIP, s.NamaSnapshot AS Nama,
+                       ISNULL(NULLIF(sc.Name, ''), s.SectionSnapshot) AS Section, ISNULL(d.Name, '') AS Department,
+                       s.JadwalKerja,
+                       CASE WHEN s.AreaKerja = 'Other' AND s.AreaKerjaLainnya IS NOT NULL AND s.AreaKerjaLainnya <> '' THEN s.AreaKerjaLainnya ELSE s.AreaKerja END AS AreaKerja,
+                       s.JamTidur, s.KualitasTidur, s.GejalaKesehatan, s.KondisiFokus, s.KonsumsiObat, s.CreatedAt AS WaktuUtc,
+                       {clinicCols}
+                FROM dbo.FitToWorkSubmissions s
+                INNER JOIN dbo.Employees e ON e.Id = s.EmployeeId AND e.MitraId IS NULL
+                LEFT JOIN dbo.Departments d ON d.Id = e.DepartmentId
+                LEFT JOIN dbo.Sections sc ON sc.Id = e.SectionId
+                {clinicApply}
+                WHERE s.CreatedAt >= @FromUtc AND s.CreatedAt < @ToUtc
+                  AND s.{NotFit}
+                  AND (@Dept IS NULL OR d.Name = @Dept)
+                ORDER BY s.CreatedAt DESC";
+            return ListAsync<FtwScreeningRow>(sql, new { f.FromUtc, f.ToUtc, Dept = f.Department, Offset = f.OffsetMinutes, Max = max });
         }
 
         public Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max)

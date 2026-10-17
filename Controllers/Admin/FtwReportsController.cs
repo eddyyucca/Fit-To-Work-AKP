@@ -163,6 +163,178 @@ namespace FitToWorkApp.Controllers.Admin
             return ExcelFile(wb, $"TindakLanjut_TidakFit_{vm.From:yyyyMMdd}_{vm.To:yyyyMMdd}.xlsx");
         }
 
+        // ============================ Hasil screening FTW & pemeriksaan ============================
+
+        private const int ScreeningPageMax = 1000;
+        private const int ScreeningExcelMax = 5000;
+
+        [HttpGet("Screening")]
+        public async Task<IActionResult> Screening(DateTime? from, DateTime? to, string? department, string? scope)
+        {
+            return View(await BuildScreeningAsync(from, to, department, scope, ScreeningPageMax));
+        }
+
+        [HttpGet("Screening/Export")]
+        public async Task<IActionResult> ExportScreening(DateTime? from, DateTime? to, string? department, string? scope)
+        {
+            var vm = await BuildScreeningAsync(from, to, department, scope, ScreeningExcelMax);
+            var clinic = vm.CanSeeClinic;
+            var lastCol = clinic ? 14 : 11;
+
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Screening FTW");
+
+            ws.Cell(1, 1).Value = "LAPORAN HASIL SCREENING FIT TO WORK" + (clinic ? " DAN PEMERIKSAAN KLINIK" : "");
+            ws.Range(1, 1, 1, lastCol).Merge();
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 14;
+            ws.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ws.Cell(2, 1).Value = $"Periode {vm.From:dd/MM/yyyy} - {vm.To:dd/MM/yyyy}" + (vm.Department is null ? "" : $" · Department: {vm.Department}")
+                                  + (vm.Scope == "diperiksa" ? " · Hanya yang sudah diperiksa klinik" : "");
+            ws.Range(2, 1, 2, lastCol).Merge();
+            ws.Cell(2, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            // Header dua tingkat: kolom identitas & hasil digabung vertikal, 5 kolom screening berada di bawah "HASIL SCREENING FTW"
+            const int h1 = 4, h2 = 5, first = 6;
+            string[] single = { "NO", "TANGGAL", "NAMA", "SECTION", "JADWAL KERJA", "AREA KERJA" };
+            for (var c = 1; c <= single.Length; c++)
+            {
+                ws.Cell(h1, c).Value = single[c - 1];
+                ws.Range(h1, c, h2, c).Merge();
+            }
+            ws.Cell(h1, 7).Value = "HASIL SCREENING FTW";
+            ws.Range(h1, 7, h1, 11).Merge();
+            string[] sub = { "JUMLAH JAM TIDUR", "KUALITAS TIDUR", "GEJALA KESEHATAN", "KONDISI FOKUS DAN PIKIRAN", "KONSUMSI OBAT" };
+            for (var i = 0; i < sub.Length; i++) ws.Cell(h2, 7 + i).Value = sub[i];
+            if (clinic)
+            {
+                string[] result = { "HASIL PEMERIKSAAN", "TINDAKAN", "REKOMENDASI" };
+                for (var i = 0; i < result.Length; i++)
+                {
+                    ws.Cell(h1, 12 + i).Value = result[i];
+                    ws.Range(h1, 12 + i, h2, 12 + i).Merge();
+                }
+            }
+            var head = ws.Range(h1, 1, h2, lastCol);
+            head.Style.Font.Bold = true;
+            head.Style.Fill.BackgroundColor = XLColor.FromHtml("#9BC2E6");
+            head.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            head.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            head.Style.Alignment.WrapText = true;
+
+            var r = first;
+            var no = 1;
+            foreach (var x in vm.Rows)
+            {
+                ReportExcel.SetCell(ws.Cell(r, 1), no++);
+                ReportExcel.SetCell(ws.Cell(r, 2), x.Tanggal);
+                ReportExcel.SetCell(ws.Cell(r, 3), x.Nama.ToUpperInvariant());
+                ReportExcel.SetCell(ws.Cell(r, 4), x.Section.ToUpperInvariant());
+                ReportExcel.SetCell(ws.Cell(r, 5), x.JadwalKerja);
+                ReportExcel.SetCell(ws.Cell(r, 6), x.AreaKerja);
+                ReportExcel.SetCell(ws.Cell(r, 7), x.JamTidur);
+                ReportExcel.SetCell(ws.Cell(r, 8), x.KualitasTidur);
+                ReportExcel.SetCell(ws.Cell(r, 9), x.GejalaKesehatan);
+                ReportExcel.SetCell(ws.Cell(r, 10), x.KondisiFokus);
+                ReportExcel.SetCell(ws.Cell(r, 11), x.KonsumsiObat);
+                if (clinic)
+                {
+                    ReportExcel.SetCell(ws.Cell(r, 12), x.HasilPemeriksaan);
+                    ReportExcel.SetCell(ws.Cell(r, 13), x.Tindakan);
+                    ReportExcel.SetCell(ws.Cell(r, 14), x.RekomendasiText);
+                }
+                r++;
+            }
+
+            var last = Math.Max(r - 1, first);
+            var table = ws.Range(h1, 1, last, lastCol);
+            table.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            table.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            if (vm.Rows.Count > 0)
+            {
+                var body = ws.Range(first, 1, last, lastCol);
+                body.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                body.Style.Alignment.WrapText = true;
+                body.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                if (clinic) ws.Range(first, 12, last, 14).Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F2F2");
+            }
+            else
+            {
+                ws.Cell(first, 1).Value = "(tidak ada data)";
+                ws.Range(first, 1, first, lastCol).Merge();
+                ws.Cell(first, 1).Style.Font.Italic = true;
+            }
+
+            double[] widths = { 5, 12, 28, 14, 14, 16, 14, 30, 26, 28, 14, 32, 34, 24 };
+            for (var c = 1; c <= lastCol; c++) ws.Column(c).Width = widths[c - 1];
+
+            ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+            ws.PageSetup.PaperSize = XLPaperSize.A4Paper;
+            ws.PageSetup.FitToPages(1, 0);
+            ws.PageSetup.SetRowsToRepeatAtTop(h1, h2);
+            ws.SheetView.FreezeRows(h2);
+
+            using var stream = new MemoryStream();
+            wb.SaveAs(stream);
+            return File(stream.ToArray(), ReportExcel.ContentType, $"Screening_FTW_Pemeriksaan_{vm.From:yyyyMMdd}_{vm.To:yyyyMMdd}.xlsx");
+        }
+
+        private async Task<FtwScreeningViewModel> BuildScreeningAsync(DateTime? from, DateTime? to, string? department, string? scope, int max)
+        {
+            var access = await _permissions.GetAsync(User);
+            var canClinic = access.Has(Permissions.MedicalVisit);
+            var rg = Range(from, to, department, _clock.Today.AddDays(-6));
+
+            var rows = await _repo.GetScreeningAsync(rg.Filter, canClinic, max + 1);
+            var truncated = rows.Count > max;
+            if (truncated) rows = rows.Take(max).ToList();
+
+            // 1 baris per karyawan per hari: pengisian tidak fit terakhir pada hari itu (hasil query terurut terbaru dulu)
+            rows = rows.GroupBy(r => (r.EmployeeId, _clock.ToLocal(r.WaktuUtc).Date)).Select(g => g.First()).ToList();
+
+            foreach (var r in rows)
+            {
+                r.Tanggal = _clock.ToLocal(r.WaktuUtc).Date;
+                var hasil = new List<string>();
+                if (!string.IsNullOrWhiteSpace(r.Diagnosa)) hasil.Add(r.Diagnosa.Trim());
+                if (!string.IsNullOrWhiteSpace(r.Pemeriksaan))
+                    hasil.Add(hasil.Count > 0 ? $"({r.Pemeriksaan.Trim()})" : r.Pemeriksaan.Trim());
+                r.HasilPemeriksaan = string.Join("\n", hasil);
+
+                var tindakan = new List<string>();
+                if (!string.IsNullOrWhiteSpace(r.Obat)) tindakan.Add(r.Obat.Trim());
+                if (!string.IsNullOrWhiteSpace(r.CatatanRekomendasi)) tindakan.Add(r.CatatanRekomendasi.Trim());
+                r.Tindakan = string.Join("\n", tindakan);
+
+                // Istilah "LANJUT BEKERJA" mengikuti format laporan yang dipakai (di aplikasi: "Kembali bekerja")
+                r.RekomendasiText = r.Rekomendasi is null
+                    ? ""
+                    : r.Rekomendasi == RecommendationTypes.KembaliBekerja
+                        ? "LANJUT BEKERJA"
+                        : RecommendationTypes.Label(r.Rekomendasi, r.HariIstirahat, r.IstirahatDari, r.IstirahatSampai).ToUpperInvariant();
+            }
+
+            var onlyExamined = canClinic && string.Equals(scope, "diperiksa", StringComparison.OrdinalIgnoreCase);
+            var vm = new FtwScreeningViewModel
+            {
+                From = rg.FromD,
+                To = rg.ToD,
+                Department = rg.Filter.Department,
+                Scope = onlyExamined ? "diperiksa" : "all",
+                Departments = await DepartmentNamesAsync(rg.Filter.Department),
+                GeneratedAt = _clock.LocalNow,
+                CanSeeClinic = canClinic,
+                Truncated = truncated,
+                Total = rows.Count,
+                Diperiksa = rows.Count(r => r.Diperiksa)
+            };
+            vm.Rows = rows
+                .Where(r => !onlyExamined || r.Diperiksa)
+                .OrderBy(r => r.Tanggal).ThenBy(r => r.Nama)
+                .ToList();
+            return vm;
+        }
+
         // ============================ Membangun data ============================
 
         private IActionResult ExcelFile(XLWorkbook wb, string name)
