@@ -28,6 +28,7 @@ builder.Services.AddScoped<IFormOptionRepository, FormOptionRepository>();
 builder.Services.AddScoped<IOrganizationRepository, OrganizationRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IDashboardExtraRepository, DashboardExtraRepository>();
+builder.Services.AddScoped<IClinicReportRepository, ClinicReportRepository>();
 builder.Services.AddScoped<IGymRepository, GymRepository>();
 builder.Services.AddScoped<IActivityTypeRepository, ActivityTypeRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();

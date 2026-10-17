@@ -156,8 +156,8 @@
                         }
                         @if (anyMedical || access.Has(Permissions.MedicalMaster))
                         {
-                            <li class="nav-item @Open("ClinicVisits", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
-                                <a href="#" class="nav-link @Active("ClinicVisits", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                            <li class="nav-item @Open("ClinicVisits", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                                <a href="#" class="nav-link @Active("ClinicVisits", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
                                     <i class="nav-icon bi bi-hospital"></i>
                                     <p>Klinik &amp; Kesehatan<i class="nav-arrow bi bi-chevron-right"></i></p>
                                 </a>
@@ -196,6 +196,11 @@
                                         <li class="nav-item">
                                             <a class="nav-link @Active("MedicalRecord")" asp-area="" asp-controller="MedicalRecord" asp-action="Index">
                                                 <i class="nav-icon bi bi-circle"></i><p>Rekam Medis Karyawan</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("ClinicReports")" asp-area="" asp-controller="ClinicReports" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Laporan Klinik</p>
                                             </a>
                                         </li>
                                     }

@@ -1,0 +1,553 @@
+@using Microsoft.AspNetCore.Html
+@using FitToWorkApp.Models.ViewModels
+@model ClinicReportViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Laporan Klinik";
+    Layout = "_AdminLayout";
+
+    var today = Clock.Today;
+    var monthStart = new DateTime(today.Year, today.Month, 1);
+    var lastMonthStart = monthStart.AddMonths(-1);
+    var lastMonthEnd = monthStart.AddDays(-1);
+    var yearStart = new DateTime(today.Year, 1, 1);
+
+    string F(DateTime d) => d.ToString("yyyy-MM-dd");
+    string Lbl(DateTime d) => d.ToString("dd/MM/yyyy");
+
+    // Kenaikan dianggap "memburuk" (merah), penurunan "membaik" (hijau): kasus, hari istirahat, rujukan.
+    IHtmlContent Delta(int now, int before)
+    {
+        if (now == 0 && before == 0) return new HtmlString("<span class=\"text-muted\">&ndash;</span>");
+        if (before == 0) return new HtmlString("<span class=\"text-danger\">&#9650; baru</span>");
+        var pct = (now - before) * 100m / before;
+        if (now == before) return new HtmlString("<span class=\"text-muted\">&#9644; 0%</span>");
+        var cls = now > before ? "text-danger" : "text-success";
+        var arrow = now > before ? "&#9650;" : "&#9660;";
+        return new HtmlString($"<span class=\"{cls}\">{arrow} {Math.Abs(pct):0.#}%</span>");
+    }
+
+    var s = Model.Summary;
+    var p = Model.Previous;
+    var maxHeat = 0;
+    for (var d = 0; d < 7; d++) for (var h = 0; h < 24; h++) maxHeat = Math.Max(maxHeat, Model.Heat[d, h]);
+    string[] hari = { "Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min" };
+    string[] ageOrder = { "< 25", "25-34", "35-44", "45-54", "55+", "Tidak diketahui" };
+    string Gender(string g) => g?.Trim() switch { "L" => "Laki-laki", "P" => "Perempuan", _ => "Tidak diketahui" };
+    var byGender = Model.Profile.GroupBy(x => Gender(x.JenisKelamin)).Select(g => new { Nama = g.Key, Jumlah = g.Sum(x => x.Jumlah) }).OrderByDescending(x => x.Jumlah).ToList();
+    var byAge = ageOrder.Select(a => new { Nama = a, Jumlah = Model.Profile.Where(x => x.KelompokUmur == a).Sum(x => x.Jumlah) }).Where(x => x.Jumlah > 0).ToList();
+    var visitTotal = s.TotalKunjungan;
+}
+
+<style>
+    .rpt-kpi .small-box .inner h3 { font-size: 1.9rem; }
+    .rpt-heat td { text-align: center; font-size: .72rem; padding: .2rem .1rem; min-width: 1.6rem; }
+    .rpt-heat th { font-size: .7rem; text-align: center; padding: .2rem .1rem; }
+    .rpt-table td, .rpt-table th { font-size: .85rem; }
+    .rpt-chart { position: relative; height: 260px; }
+    .rpt-section { margin-top: 2rem; }
+    @@media print {
+        .app-sidebar, .app-header, .app-footer, .no-print, .sidebar-overlay { display: none !important; }
+        .app-main, .app-wrapper { margin: 0 !important; padding: 0 !important; }
+        .card { break-inside: avoid; box-shadow: none !important; }
+        .rpt-section { break-before: auto; }
+    }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Laporan Klinik</h4>
+        <div class="text-muted small">
+            Periode <strong>@Lbl(Model.From) &ndash; @Lbl(Model.To)</strong> (@Model.Days hari)
+            @if (Model.Department is not null) { <text> &middot; Department <strong>@Model.Department</strong></text> }
+            &middot; dibanding @Lbl(Model.PrevFrom) &ndash; @Lbl(Model.PrevTo)
+        </div>
+    </div>
+    <div class="d-flex gap-2 no-print">
+        <a class="btn btn-success btn-sm" asp-action="Export" asp-route-from="@F(Model.From)" asp-route-to="@F(Model.To)" asp-route-department="@Model.Department">&#128229; Download Excel</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">&#128424; Cetak / Simpan PDF</button>
+    </div>
+</div>
+
+<div class="card shadow-sm no-print">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="from">Dari tanggal</label>
+                <input type="date" id="from" name="from" class="form-control form-control-sm" value="@F(Model.From)" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="to">Sampai tanggal</label>
+                <input type="date" id="to" name="to" class="form-control form-control-sm" value="@F(Model.To)" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="department">Department</label>
+                <select id="department" name="department" class="form-select form-select-sm">
+                    <option value="">Semua department</option>
+                    @foreach (var d in Model.Departments)
+                    {
+                        <option value="@d" selected="@(string.Equals(d, Model.Department, StringComparison.OrdinalIgnoreCase))">@d</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-auto">
+                <button type="submit" class="btn btn-primary btn-sm">Tampilkan</button>
+            </div>
+            <div class="col-12 col-md d-flex flex-wrap gap-1 justify-content-md-end">
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(monthStart)" asp-route-to="@F(today)" asp-route-department="@Model.Department">Bulan ini</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(lastMonthStart)" asp-route-to="@F(lastMonthEnd)" asp-route-department="@Model.Department">Bulan lalu</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(today.AddDays(-29))" asp-route-to="@F(today)" asp-route-department="@Model.Department">30 hari</a>
+                <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-from="@F(yearStart)" asp-route-to="@F(today)" asp-route-department="@Model.Department">Tahun ini</a>
+            </div>
+        </form>
+        @if (Model.RangeWasClamped)
+        {
+            <div class="alert alert-warning py-1 small mt-2 mb-0">Rentang dibatasi maksimal @Model.RangeDayLimit hari; tanggal awal disesuaikan.</div>
+        }
+    </div>
+</div>
+
+@if (Model.CanVisit)
+{
+    <!-- =============================== KUNJUNGAN =============================== -->
+    <div class="rpt-section">
+        <h5 class="mb-1"><i class="bi bi-hospital me-1"></i>Kunjungan klinik</h5>
+        <div class="text-muted small mb-2">Kunjungan yang dibatalkan tidak dihitung. Termasuk karyawan mitra.</div>
+
+        <div class="row rpt-kpi g-2 mb-3">
+            @foreach (var k in new[]
+            {
+                (Nama: "Kunjungan", Now: s.TotalKunjungan, Before: p.TotalKunjungan),
+                (Nama: "Karyawan unik", Now: s.KaryawanUnik, Before: p.KaryawanUnik),
+                (Nama: "Istirahat", Now: s.Istirahat, Before: p.Istirahat),
+                (Nama: "Hari istirahat", Now: s.TotalHariIstirahat, Before: p.TotalHariIstirahat),
+                (Nama: "Rujuk", Now: s.Rujuk, Before: p.Rujuk),
+                (Nama: "Obat keluar", Now: s.ObatKeluar, Before: p.ObatKeluar)
+            })
+            {
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body py-2">
+                            <div class="text-muted small">@k.Nama</div>
+                            <div class="fs-3 fw-bold lh-1">@k.Now</div>
+                            <div class="small">@Delta(k.Now, k.Before) <span class="text-muted">vs @k.Before</span></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Kunjungan per hari</div>
+                    <div class="card-body"><div class="rpt-chart"><canvas id="chTrend"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Rekomendasi</div>
+                    <div class="card-body"><div class="rpt-chart"><canvas id="chRekom"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header fw-semibold">Per department <span class="text-muted fw-normal small">(per 100 karyawan = kunjungan ÷ karyawan AKP aktif × 100)</span></div>
+            <div class="card-body">
+                <div class="rpt-chart mb-3"><canvas id="chDept"></canvas></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped rpt-table mb-0">
+                        <thead><tr><th>Department</th><th class="text-end">Kunjungan</th><th class="text-end">Karyawan</th><th class="text-end">Karyawan aktif</th><th class="text-end">Per 100</th><th class="text-end">Hari istirahat</th><th class="text-end">Rujuk</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in Model.ByDepartment)
+                            {
+                                <tr>
+                                    <td>@d.Department</td><td class="text-end">@d.Jumlah</td><td class="text-end">@d.Karyawan</td>
+                                    <td class="text-end">@(d.KaryawanAktif?.ToString() ?? "-")</td>
+                                    <td class="text-end">@(d.PerSeratus?.ToString("0.#") ?? "-")</td>
+                                    <td class="text-end">@d.HariIstirahat</td><td class="text-end">@d.Rujuk</td>
+                                </tr>
+                            }
+                            @if (Model.ByDepartment.Count == 0) { <tr><td colspan="7" class="text-center text-muted">Tidak ada data.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Penyakit -->
+        <div class="row g-3 mt-0">
+            <div class="col-lg-5">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Penyakit per kategori</div>
+                    <div class="card-body"><div class="rpt-chart"><canvas id="chKategori"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Penyakit terbanyak</div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped rpt-table mb-0">
+                                <thead><tr><th>Kode</th><th>Penyakit</th><th>Kategori</th><th class="text-end">Kasus</th><th class="text-end">Karyawan</th></tr></thead>
+                                <tbody>
+                                    @foreach (var d in Model.TopDiseases)
+                                    {
+                                        <tr><td>@d.Kode</td><td>@d.Nama</td><td>@d.Kategori</td><td class="text-end">@d.Jumlah</td><td class="text-end">@d.Karyawan</td></tr>
+                                    }
+                                    @if (Model.TopDiseases.Count == 0) { <tr><td colspan="5" class="text-center text-muted">Tidak ada data.</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.DiseaseMonthLabels.Count >= 2 && Model.DiseaseMonthSeries.Count > 0)
+        {
+            <div class="card shadow-sm mt-3">
+                <div class="card-header fw-semibold">Tren 5 penyakit teratas per bulan</div>
+                <div class="card-body"><div class="rpt-chart"><canvas id="chPenyakitBulan"></canvas></div></div>
+            </div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Kasus berulang <span class="text-muted fw-normal small">(penyakit sama dalam 7 hari)</span></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-striped rpt-table mb-0">
+                            <thead><tr><th>Penyakit</th><th class="text-end">Kasus berulang</th><th class="text-end">Karyawan</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in Model.RepeatDiseases)
+                                {
+                                    <tr><td>@d.Nama</td><td class="text-end">@d.Jumlah</td><td class="text-end">@d.Karyawan</td></tr>
+                                }
+                                @if (Model.RepeatDiseases.Count == 0) { <tr><td colspan="3" class="text-center text-muted">Tidak ada kasus berulang.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Kunjungan berulang <span class="text-muted fw-normal small">(3 kali atau lebih)</span></div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped rpt-table mb-0">
+                                <thead><tr><th>NIP</th><th>Nama</th><th>Department</th><th class="text-end">Kunjungan</th><th class="text-end">Hari istirahat</th></tr></thead>
+                                <tbody>
+                                    @foreach (var v in Model.RepeatVisitors)
+                                    {
+                                        <tr><td>@v.NIP</td><td>@v.Nama</td><td>@v.Department</td><td class="text-end">@v.Jumlah</td><td class="text-end">@v.HariIstirahat</td></tr>
+                                    }
+                                    @if (Model.RepeatVisitors.Count == 0) { <tr><td colspan="5" class="text-center text-muted">Tidak ada.</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profil & jam sibuk -->
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Profil pasien</div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm rpt-table mb-0">
+                            <thead><tr><th colspan="2">Jenis kelamin</th></tr></thead>
+                            <tbody>
+                                @foreach (var g in byGender)
+                                {
+                                    <tr><td>@g.Nama</td><td class="text-end">@g.Jumlah <span class="text-muted">(@(visitTotal > 0 ? (g.Jumlah * 100m / visitTotal).ToString("0.#") : "0")%)</span></td></tr>
+                                }
+                            </tbody>
+                            <thead><tr><th colspan="2">Kelompok umur</th></tr></thead>
+                            <tbody>
+                                @foreach (var g in byAge)
+                                {
+                                    <tr><td>@g.Nama</td><td class="text-end">@g.Jumlah <span class="text-muted">(@(visitTotal > 0 ? (g.Jumlah * 100m / visitTotal).ToString("0.#") : "0")%)</span></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Jam sibuk <span class="text-muted fw-normal small">(kunjungan per hari &amp; jam, waktu site)</span></div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered rpt-heat mb-0">
+                                <thead>
+                                    <tr><th></th>@for (var h = 0; h < 24; h++) { <th>@h.ToString("00")</th> }</tr>
+                                </thead>
+                                <tbody>
+                                    @for (var d = 0; d < 7; d++)
+                                    {
+                                        <tr>
+                                            <th>@hari[d]</th>
+                                            @for (var h = 0; h < 24; h++)
+                                            {
+                                                var n = Model.Heat[d, h];
+                                                var alpha = maxHeat > 0 ? Math.Round(n / (double)maxHeat, 2) : 0;
+                                                var alphaCss = alpha.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                                                var textCss = alpha > 0.55 ? "#fff" : "inherit";
+                                                <td style="background: rgba(13,110,253,@alphaCss); color: @textCss">@(n > 0 ? n.ToString() : "")</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Obat -->
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Obat terbanyak keluar</div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-striped rpt-table mb-0">
+                            <thead><tr><th>Obat</th><th>Satuan</th><th class="text-end">Jumlah keluar</th><th class="text-end">Kunjungan</th></tr></thead>
+                            <tbody>
+                                @foreach (var m in Model.TopMedicines)
+                                {
+                                    <tr><td>@m.Nama</td><td>@m.Satuan</td><td class="text-end">@m.Qty</td><td class="text-end">@m.Kunjungan</td></tr>
+                                }
+                                @if (Model.TopMedicines.Count == 0) { <tr><td colspan="4" class="text-center text-muted">Tidak ada pemakaian obat.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 mt-3">
+                    <div class="card-header fw-semibold">Peringatan stok obat <span class="text-muted fw-normal small">(stok saat ini; pemakaian 30 hari terakhir)</span></div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped rpt-table mb-0">
+                                <thead><tr><th>Obat</th><th class="text-end">Stok</th><th class="text-end">Min.</th><th class="text-end">Per hari</th><th class="text-end">Habis dalam</th></tr></thead>
+                                <tbody>
+                                    @foreach (var m in Model.StockAlerts)
+                                    {
+                                        <tr class="@(m.DiBawahMinimum ? "table-danger" : "")">
+                                            <td>@m.Nama</td>
+                                            <td class="text-end">@m.Stok @m.Satuan</td>
+                                            <td class="text-end">@m.StokMinimum</td>
+                                            <td class="text-end">@m.PemakaianPerHari.ToString("0.##")</td>
+                                            <td class="text-end">@(m.PerkiraanHariHabis is int hh ? hh + " hari" : "-")</td>
+                                        </tr>
+                                    }
+                                    @if (Model.StockAlerts.Count == 0) { <tr><td colspan="5" class="text-center text-muted">Semua stok aman.</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanCheckup)
+{
+    var c = Model.Checkup;
+    <!-- =============================== PEMERIKSAAN KESEHATAN =============================== -->
+    <div class="rpt-section">
+        <h5 class="mb-1"><i class="bi bi-clipboard2-pulse me-1"></i>Pemeriksaan kesehatan</h5>
+        <div class="text-muted small mb-2">Batas &ldquo;tinggi&rdquo; mengikuti menu Acuan Nilai Pemkes. Cakupan dihitung terhadap karyawan AKP aktif.</div>
+
+        <div class="row g-2 mb-3">
+            @foreach (var k in new[]
+            {
+                (Nama: "Pemeriksaan", Nilai: c.Total.ToString()),
+                (Nama: "Karyawan diperiksa", Nilai: c.Karyawan.ToString()),
+                (Nama: "Cakupan", Nilai: c.CakupanPersen is decimal cp ? cp.ToString("0.#") + "%" : "-"),
+                (Nama: "Ada temuan", Nilai: c.AdaTemuan.ToString()),
+                (Nama: "Tindak lanjut belum selesai", Nilai: c.FollowUpBelumSelesai.ToString()),
+                (Nama: "Tindak lanjut terlambat", Nilai: c.FollowUpTerlambat.ToString())
+            })
+            {
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card shadow-sm h-100"><div class="card-body py-2">
+                        <div class="text-muted small">@k.Nama</div><div class="fs-3 fw-bold lh-1">@k.Nilai</div>
+                    </div></div>
+                </div>
+            }
+        </div>
+        <div class="text-muted small mb-2">Tindak lanjut dihitung untuk semua periode, tidak terbatas rentang tanggal di atas.</div>
+
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Sebaran risiko</div>
+                    <div class="card-body"><div class="rpt-chart"><canvas id="chRisiko"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Per department</div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped rpt-table mb-0">
+                                <thead><tr><th>Department</th><th class="text-end">Diperiksa</th><th class="text-end">Rata TD</th><th class="text-end">TD tinggi</th><th class="text-end">Gula tinggi</th><th class="text-end">Kolesterol tinggi</th></tr></thead>
+                                <tbody>
+                                    @foreach (var d in Model.CheckupByDepartment)
+                                    {
+                                        <tr>
+                                            <td>@d.Department</td><td class="text-end">@d.Total</td>
+                                            <td class="text-end">@(d.RataSistolik is decimal sis && d.RataDiastolik is decimal dia ? $"{sis:0}/{dia:0}" : "-")</td>
+                                            <td class="text-end">@d.TdTinggi</td><td class="text-end">@d.GulaTinggi</td><td class="text-end">@d.KolesterolTinggi</td>
+                                        </tr>
+                                    }
+                                    @if (Model.CheckupByDepartment.Count == 0) { <tr><td colspan="6" class="text-center text-muted">Tidak ada data.</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header fw-semibold">Tindak lanjut terlambat <span class="text-muted fw-normal small">(terlama dulu, maks. 30)</span></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped rpt-table mb-0">
+                        <thead><tr><th>NIP</th><th>Nama</th><th>Department</th><th>Diperiksa</th><th>Jatuh tempo</th><th class="text-end">Terlambat</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in Model.OverdueFollowUps)
+                            {
+                                <tr><td>@f.NIP</td><td>@f.Nama</td><td>@f.Department</td><td>@Lbl(Clock.ToLocal(f.ExaminedAtUtc))</td><td>@Lbl(f.FollowUpDate)</td><td class="text-end">@f.HariTerlambat hari</td></tr>
+                            }
+                            @if (Model.OverdueFollowUps.Count == 0) { <tr><td colspan="6" class="text-center text-muted">Tidak ada tindak lanjut yang terlambat.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanDrug)
+{
+    var dr = Model.Drug;
+    string Pct(int part, int whole) => whole > 0 ? (part * 100m / whole).ToString("0.#") + "%" : "-";
+    <!-- =============================== TES URIN & ALKOHOL =============================== -->
+    <div class="rpt-section">
+        <h5 class="mb-1"><i class="bi bi-droplet-half me-1"></i>Tes urin &amp; alkohol</h5>
+        <div class="text-muted small mb-2">Ringkasan angka saja; nama karyawan tidak ditampilkan di laporan ini.</div>
+
+        <div class="row g-2 mb-3">
+            @foreach (var k in new[]
+            {
+                (Nama: "Total tes", Nilai: dr.Total.ToString()),
+                (Nama: "Tes urin", Nilai: dr.TesUrin.ToString()),
+                (Nama: "Urin positif", Nilai: $"{dr.UrinPositif} ({Pct(dr.UrinPositif, dr.TesUrin)})"),
+                (Nama: "Tes alkohol", Nilai: dr.TesAlkohol.ToString()),
+                (Nama: "Alkohol positif", Nilai: $"{dr.AlkoholPositif} ({Pct(dr.AlkoholPositif, dr.TesAlkohol)})")
+            })
+            {
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card shadow-sm h-100"><div class="card-body py-2">
+                        <div class="text-muted small">@k.Nama</div><div class="fs-4 fw-bold lh-1">@k.Nilai</div>
+                    </div></div>
+                </div>
+            }
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Per alasan tes</div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-striped rpt-table mb-0">
+                            <thead><tr><th>Alasan</th><th class="text-end">Tes</th><th class="text-end">Urin positif</th><th class="text-end">Alkohol positif</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in Model.DrugByReason)
+                                {
+                                    <tr><td>@d.Nama</td><td class="text-end">@d.Total</td><td class="text-end">@d.UrinPositif</td><td class="text-end">@d.AlkoholPositif</td></tr>
+                                }
+                                @if (Model.DrugByReason.Count == 0) { <tr><td colspan="4" class="text-center text-muted">Tidak ada data.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">Per department</div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped rpt-table mb-0">
+                                <thead><tr><th>Department</th><th class="text-end">Tes</th><th class="text-end">Urin positif</th><th class="text-end">Alkohol positif</th></tr></thead>
+                                <tbody>
+                                    @foreach (var d in Model.DrugByDepartment)
+                                    {
+                                        <tr><td>@d.Nama</td><td class="text-end">@d.Total</td><td class="text-end">@d.UrinPositif</td><td class="text-end">@d.AlkoholPositif</td></tr>
+                                    }
+                                    @if (Model.DrugByDepartment.Count == 0) { <tr><td colspan="4" class="text-center text-muted">Tidak ada data.</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="text-muted small mt-4 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Laporan ini hanya membaca data; tidak mengubah data apa pun.</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+    <script>
+        (function () {
+            if (typeof Chart === 'undefined') return;
+            var palette = ['#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#ffc107', '#0dcaf0', '#6c757d', '#d63384'];
+            function mk(id, cfg) { var el = document.getElementById(id); if (el) new Chart(el, cfg); }
+            var noLegend = { plugins: { legend: { display: false } }, maintainAspectRatio: false };
+
+            @if (Model.CanVisit)
+            {
+                <text>
+                var trend = @Json.Serialize(new { labels = Model.TrendLabels, values = Model.TrendValues });
+                mk('chTrend', { type: 'line', data: { labels: trend.labels, datasets: [{ label: 'Kunjungan', data: trend.values, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,.12)', fill: true, tension: .25, pointRadius: trend.labels.length > 45 ? 0 : 3 }] },
+                    options: { plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+
+                mk('chRekom', { type: 'doughnut', data: { labels: ['Kembali bekerja', 'Kerja terbatas', 'Istirahat', 'Rujuk'],
+                    datasets: [{ data: [@s.KembaliBekerja, @s.KerjaTerbatas, @s.Istirahat, @s.Rujuk], backgroundColor: ['#198754', '#ffc107', '#fd7e14', '#dc3545'] }] },
+                    options: { maintainAspectRatio: false } });
+
+                var dept = @Json.Serialize(Model.ByDepartment.Take(12).Select(d => new { nama = d.Department, jumlah = d.Jumlah }));
+                mk('chDept', { type: 'bar', data: { labels: dept.map(function (x) { return x.nama; }), datasets: [{ label: 'Kunjungan', data: dept.map(function (x) { return x.jumlah; }), backgroundColor: '#0d6efd' }] },
+                    options: { plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+
+                var kat = @Json.Serialize(Model.ByCategory.Take(10).Select(d => new { nama = d.Nama, jumlah = d.Jumlah }));
+                mk('chKategori', { type: 'bar', data: { labels: kat.map(function (x) { return x.nama; }), datasets: [{ data: kat.map(function (x) { return x.jumlah; }), backgroundColor: '#6f42c1' }] },
+                    options: { indexAxis: 'y', plugins: { legend: { display: false } }, maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+
+                var pb = @Json.Serialize(new { labels = Model.DiseaseMonthLabels, series = Model.DiseaseMonthSeries.Select(x => new { nama = x.Nama, values = x.Values }) });
+                mk('chPenyakitBulan', { type: 'line', data: { labels: pb.labels, datasets: pb.series.map(function (x, i) { return { label: x.nama, data: x.values, borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length], tension: .25 }; }) },
+                    options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+                </text>
+            }
+            @if (Model.CanCheckup)
+            {
+                <text>
+                var risk = @Json.Serialize(Model.RiskDistribution.Select(x => new { label = x.Label, jumlah = x.Jumlah }));
+                mk('chRisiko', { type: 'doughnut', data: { labels: risk.map(function (x) { return x.label; }), datasets: [{ data: risk.map(function (x) { return x.jumlah; }), backgroundColor: palette }] },
+                    options: { maintainAspectRatio: false } });
+                </text>
+            }
+        })();
+    </script>
+}

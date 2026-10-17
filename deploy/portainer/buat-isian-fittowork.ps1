@@ -10,11 +10,11 @@
   powershell -ExecutionPolicy Bypass -File deploy\portainer\buat-isian-fittowork.ps1
 #>
 param(
-  [string]$DbServer = 'mssql2022,1433',
+  [string]$DbServer = 'mssql,1433',
   [string]$DbName = 'FitToWorkDb',
   [string]$DbUser = 'sa',
   [string]$HrisUrl = 'http://host.docker.internal:8101',
-  [int]$Port = 8080,
+  [int]$Port = 8108,
   [int]$IntervalMenit = 60,
   [string]$Tag = 'latest',
   [string]$OutFile = (Join-Path $env:USERPROFILE 'akp-fittowork-isian.txt'),
