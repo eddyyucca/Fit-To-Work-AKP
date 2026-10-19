@@ -530,6 +530,11 @@ BEGIN
 END
 GO
 
+-- Nama Inggris asli ICD-10 (opsional). Diisi oleh migration_diseases_name_en.sql. Idempotent.
+IF COL_LENGTH('dbo.Diseases', 'NameEn') IS NULL
+    ALTER TABLE dbo.Diseases ADD NameEn NVARCHAR(200) NULL;
+GO
+
 -- ---------- Master obat & stok ----------
 IF OBJECT_ID('dbo.Medicines', 'U') IS NULL
 BEGIN

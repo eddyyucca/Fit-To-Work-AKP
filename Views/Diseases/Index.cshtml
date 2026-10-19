@@ -20,6 +20,7 @@
                 <tr>
                     <th>Kode</th>
                     <th>Nama Penyakit</th>
+                    <th>Nama Inggris (ICD-10)</th>
                     <th>Kategori</th>
                     <th>Status</th>
                     <th class="text-end">Aksi</th>
@@ -31,11 +32,12 @@
                     <tr class="@(d.IsActive ? "" : "text-muted")">
                         <td class="text-nowrap">@d.Kode</td>
                         <td class="fw-semibold">@d.Name</td>
+                        <td class="small text-muted">@d.NameEn</td>
                         <td>@d.Kategori</td>
                         <td>@(d.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
                         <td class="text-end text-nowrap">
                             <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#diseaseModal"
-                                    data-mode="edit" data-id="@d.Id" data-kode="@d.Kode" data-name="@d.Name" data-kategori="@d.Kategori"
+                                    data-mode="edit" data-id="@d.Id" data-kode="@d.Kode" data-name="@d.Name" data-name-en="@d.NameEn" data-kategori="@d.Kategori"
                                     data-active="@(d.IsActive ? "true" : "false")">Ubah</button>
                             <form asp-controller="Diseases" asp-action="ToggleActive" asp-route-id="@d.Id" method="post" class="d-inline">
                                 <input type="hidden" name="activate" value="@(d.IsActive ? "false" : "true")" />
@@ -68,6 +70,11 @@
                         <label class="form-label" for="dName">Nama Penyakit</label>
                         <input class="form-control" name="Name" id="dName" maxlength="150" required />
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="dNameEn">Nama Inggris (ICD-10)</label>
+                    <input class="form-control" name="NameEn" id="dNameEn" maxlength="200" placeholder="Acute upper respiratory infection, unspecified" />
+                    <div class="form-text">Opsional. Nama asli dari ICD-10 WHO.</div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label" for="dKategori">Kategori</label>
@@ -117,6 +124,7 @@
             document.getElementById('dId').value = isEdit ? b.id : 0;
             document.getElementById('dKode').value = isEdit ? (b.kode || '') : '';
             document.getElementById('dName').value = isEdit ? (b.name || '') : '';
+            document.getElementById('dNameEn').value = isEdit ? (b.nameEn || '') : '';
             setSelect(document.getElementById('dKategori'), isEdit ? (b.kategori || '') : '');
             document.getElementById('dActive').checked = isEdit ? b.active === 'true' : true;
         });

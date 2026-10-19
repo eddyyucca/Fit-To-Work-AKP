@@ -8,6 +8,7 @@ namespace FitToWorkApp.Models
         public int Id { get; set; }
         public string? Kode { get; set; }          // opsional, mis. kode ICD-10 "J06.9"
         public string Name { get; set; } = string.Empty;
+        public string? NameEn { get; set; }        // opsional, nama Inggris asli ICD-10 WHO, mis. "Acute upper respiratory infection, unspecified"
         public string? Kategori { get; set; }      // opsional, mis. "Pernapasan", "Pencernaan"
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; }

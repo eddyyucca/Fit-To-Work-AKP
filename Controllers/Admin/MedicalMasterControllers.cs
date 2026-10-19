@@ -22,6 +22,10 @@ namespace FitToWorkApp.Controllers.Admin
         [StringLength(150)]
         public string Name { get; set; } = string.Empty;
 
+        /// <summary>Nama Inggris asli ICD-10 WHO (opsional).</summary>
+        [StringLength(200)]
+        public string? NameEn { get; set; }
+
         [StringLength(100)]
         public string? Kategori { get; set; }
 
@@ -79,6 +83,7 @@ namespace FitToWorkApp.Controllers.Admin
                 Id = model.Id,
                 Kode = string.IsNullOrWhiteSpace(model.Kode) ? null : model.Kode.Trim().ToUpperInvariant(),
                 Name = model.Name,
+                NameEn = string.IsNullOrWhiteSpace(model.NameEn) ? null : model.NameEn.Trim(),
                 Kategori = model.Kategori,
                 IsActive = model.IsActive
             });

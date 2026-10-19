@@ -1,0 +1,386 @@
+-- ============================================================
+-- Master Jenis Penyakit: tambahan diagnosa umum dengan kode ICD-10 (WHO, dipakai Kemenkes) berbahasa Indonesia.
+--
+-- HANYA MENAMBAH. Tidak mengubah, menimpa, atau menghapus penyakit yang sudah ada:
+--   - baris dilewati kalau KODE yang sama sudah ada, atau NAMA yang sama sudah ada
+--   - kategori baru ditambahkan ke Master Kategori Penyakit (kalau belum ada)
+-- Aman dijalankan berkali-kali. Jalankan SETELAH migration_medical.sql dan migration_master_klinik.sql
+-- (atau schema.sql terbaru), dan BACKUP database dulu.
+--
+-- Daftar ini adalah kumpulan diagnosa yang umum di klinik perusahaan / FKTP + kasus lapangan tambang
+-- (cedera, panas, gigitan, kebisingan, debu). Bukan seluruh ICD-10 (14.000+ kode). Nama Indonesia adalah
+-- padanan umum; mohon diperiksa dokter klinik terhadap buku ICD-10 resmi sebelum dipakai untuk pelaporan resmi.
+-- ============================================================
+
+SET NOCOUNT ON;
+GO
+
+-- ---------- Kategori baru di Master Kategori Penyakit ----------
+IF OBJECT_ID('dbo.DiseaseCategories', 'U') IS NOT NULL
+BEGIN
+    INSERT INTO dbo.DiseaseCategories (Name, SortOrder)
+    SELECT v.Name, v.SortOrder
+    FROM (VALUES
+        (N'Infeksi', 5), (N'Jiwa', 45), (N'Darah', 105),
+        (N'Urogenital', 106), (N'Keracunan & Lingkungan', 115), (N'Pemeriksaan', 130)
+    ) v(Name, SortOrder)
+    WHERE NOT EXISTS (SELECT 1 FROM dbo.DiseaseCategories c WHERE c.Name = v.Name);
+END
+GO
+
+-- ---------- Diagnosa ICD-10 ----------
+INSERT INTO dbo.Diseases (Kode, Name, Kategori)
+SELECT v.Kode, v.Name, v.Kategori
+FROM (VALUES
+    -- Infeksi & parasit
+    (N'A01.0', N'Demam tifoid', N'Infeksi'),
+    (N'A03.9', N'Shigellosis (disentri basiler)', N'Infeksi'),
+    (N'A06.9', N'Amebiasis', N'Infeksi'),
+    (N'A15.0', N'Tuberkulosis paru (terkonfirmasi sputum)', N'Infeksi'),
+    (N'A16.2', N'Tuberkulosis paru (tanpa konfirmasi bakteriologis)', N'Infeksi'),
+    (N'A27.9', N'Leptospirosis', N'Infeksi'),
+    (N'A41.9', N'Sepsis', N'Infeksi'),
+    (N'A90',   N'Demam dengue', N'Infeksi'),
+    (N'A91',   N'Demam berdarah dengue (DBD)', N'Infeksi'),
+    (N'B01.9', N'Cacar air (varisela)', N'Infeksi'),
+    (N'B02.9', N'Herpes zoster', N'Infeksi'),
+    (N'B05.9', N'Campak', N'Infeksi'),
+    (N'B07',   N'Kutil virus (veruka)', N'Infeksi'),
+    (N'B08.1', N'Moluskum kontagiosum', N'Infeksi'),
+    (N'B15.9', N'Hepatitis A', N'Infeksi'),
+    (N'B16.9', N'Hepatitis B akut', N'Infeksi'),
+    (N'B34.9', N'Infeksi virus (tidak spesifik)', N'Infeksi'),
+    (N'B35.3', N'Tinea pedis (kutu air)', N'Infeksi'),
+    (N'B35.4', N'Tinea korporis (kurap)', N'Infeksi'),
+    (N'B35.6', N'Tinea kruris', N'Infeksi'),
+    (N'B35.9', N'Dermatofitosis (jamur kulit, tidak spesifik)', N'Infeksi'),
+    (N'B36.0', N'Pitiriasis versikolor (panu)', N'Infeksi'),
+    (N'B37.0', N'Kandidiasis mulut (sariawan jamur)', N'Infeksi'),
+    (N'B37.3', N'Kandidiasis vagina', N'Infeksi'),
+    (N'B50.9', N'Malaria falsiparum', N'Infeksi'),
+    (N'B51.9', N'Malaria vivaks', N'Infeksi'),
+    (N'B54',   N'Malaria (tidak spesifik)', N'Infeksi'),
+    (N'B76.9', N'Infeksi cacing tambang', N'Infeksi'),
+    (N'B77.9', N'Askariasis (cacing gelang)', N'Infeksi'),
+    (N'B80',   N'Enterobiasis (cacing kremi)', N'Infeksi'),
+    (N'B85.0', N'Pedikulosis kepala (kutu rambut)', N'Infeksi'),
+    (N'B86',   N'Skabies (kudis)', N'Infeksi'),
+
+    -- Pernapasan
+    (N'J00',   N'Nasofaringitis akut (selesma / common cold)', N'Pernapasan'),
+    (N'J01.9', N'Sinusitis akut', N'Pernapasan'),
+    (N'J02.9', N'Faringitis akut', N'Pernapasan'),
+    (N'J03.9', N'Tonsilitis akut', N'Pernapasan'),
+    (N'J04.0', N'Laringitis akut', N'Pernapasan'),
+    (N'J06.9', N'Infeksi saluran pernapasan atas akut (ISPA)', N'Pernapasan'),
+    (N'J11.1', N'Influenza', N'Pernapasan'),
+    (N'J18.9', N'Pneumonia', N'Pernapasan'),
+    (N'J20.9', N'Bronkitis akut', N'Pernapasan'),
+    (N'J22',   N'Infeksi saluran pernapasan bawah akut', N'Pernapasan'),
+    (N'J30.4', N'Rinitis alergi', N'Pernapasan'),
+    (N'J31.0', N'Rinitis kronik', N'Pernapasan'),
+    (N'J32.9', N'Sinusitis kronik', N'Pernapasan'),
+    (N'J34.2', N'Deviasi septum nasi', N'Pernapasan'),
+    (N'J35.0', N'Tonsilitis kronik', N'Pernapasan'),
+    (N'J40',   N'Bronkitis', N'Pernapasan'),
+    (N'J42',   N'Bronkitis kronik', N'Pernapasan'),
+    (N'J44.9', N'Penyakit paru obstruktif kronik (PPOK)', N'Pernapasan'),
+    (N'J45.9', N'Asma', N'Pernapasan'),
+    (N'J60',   N'Pneumokoniosis pekerja batubara', N'Pernapasan'),
+    (N'J64',   N'Pneumokoniosis (penyakit paru akibat debu)', N'Pernapasan'),
+    (N'R05',   N'Batuk', N'Pernapasan'),
+    (N'R06.0', N'Sesak napas (dispnea)', N'Pernapasan'),
+
+    -- THT
+    (N'H60.9', N'Otitis eksterna (radang liang telinga)', N'THT'),
+    (N'H61.2', N'Serumen impaksi (kotoran telinga menyumbat)', N'THT'),
+    (N'H65.9', N'Otitis media nonsupuratif', N'THT'),
+    (N'H66.9', N'Otitis media (radang telinga tengah)', N'THT'),
+    (N'H72.9', N'Perforasi membran timpani', N'THT'),
+    (N'H81.1', N'Vertigo posisional paroksismal jinak', N'THT'),
+    (N'H81.9', N'Gangguan fungsi keseimbangan (vestibular)', N'THT'),
+    (N'H83.3', N'Gangguan pendengaran akibat bising', N'THT'),
+    (N'H91.9', N'Gangguan pendengaran', N'THT'),
+    (N'H92.0', N'Nyeri telinga (otalgia)', N'THT'),
+    (N'H93.1', N'Tinitus (telinga berdenging)', N'THT'),
+    (N'R04.0', N'Mimisan (epistaksis)', N'THT'),
+    (N'T16',   N'Benda asing di telinga', N'THT'),
+
+    -- Mata
+    (N'H00.0', N'Hordeolum (bintitan)', N'Mata'),
+    (N'H00.1', N'Kalazion', N'Mata'),
+    (N'H10.0', N'Konjungtivitis mukopurulen', N'Mata'),
+    (N'H10.9', N'Konjungtivitis (mata merah)', N'Mata'),
+    (N'H11.0', N'Pterigium', N'Mata'),
+    (N'H16.9', N'Keratitis', N'Mata'),
+    (N'H25.9', N'Katarak senilis', N'Mata'),
+    (N'H52.0', N'Hipermetropia (rabun dekat)', N'Mata'),
+    (N'H52.1', N'Miopia (rabun jauh)', N'Mata'),
+    (N'H52.2', N'Astigmatisme', N'Mata'),
+    (N'H52.4', N'Presbiopia', N'Mata'),
+    (N'H57.1', N'Nyeri mata', N'Mata'),
+    (N'S05.9', N'Cedera mata', N'Mata'),
+    (N'T15.0', N'Benda asing pada kornea', N'Mata'),
+    (N'T15.9', N'Benda asing pada mata', N'Mata'),
+
+    -- Pencernaan
+    (N'A05.9', N'Keracunan makanan bakteri', N'Pencernaan'),
+    (N'A09',   N'Diare dan gastroenteritis (diduga infeksi)', N'Pencernaan'),
+    (N'K21.9', N'Penyakit refluks gastroesofageal (GERD)', N'Pencernaan'),
+    (N'K25.9', N'Ulkus lambung', N'Pencernaan'),
+    (N'K26.9', N'Ulkus duodenum', N'Pencernaan'),
+    (N'K29.7', N'Gastritis', N'Pencernaan'),
+    (N'K30',   N'Dispepsia', N'Pencernaan'),
+    (N'K35.8', N'Apendisitis akut', N'Pencernaan'),
+    (N'K40.9', N'Hernia inguinalis', N'Pencernaan'),
+    (N'K52.9', N'Gastroenteritis dan kolitis non-infeksi', N'Pencernaan'),
+    (N'K58.9', N'Sindrom iritasi usus besar', N'Pencernaan'),
+    (N'K59.0', N'Konstipasi (sembelit)', N'Pencernaan'),
+    (N'K59.1', N'Diare fungsional', N'Pencernaan'),
+    (N'K60.0', N'Fisura ani akut', N'Pencernaan'),
+    (N'K64.9', N'Hemoroid (wasir)', N'Pencernaan'),
+    (N'K76.0', N'Perlemakan hati', N'Pencernaan'),
+    (N'K80.2', N'Batu empedu', N'Pencernaan'),
+    (N'K81.9', N'Kolesistitis (radang kantung empedu)', N'Pencernaan'),
+    (N'K92.2', N'Perdarahan saluran cerna', N'Pencernaan'),
+    (N'R10.1', N'Nyeri perut bagian atas', N'Pencernaan'),
+    (N'R10.3', N'Nyeri perut bagian bawah', N'Pencernaan'),
+    (N'R10.4', N'Nyeri perut (tidak spesifik)', N'Pencernaan'),
+    (N'R11',   N'Mual dan muntah', N'Pencernaan'),
+    (N'R12',   N'Nyeri ulu hati (heartburn)', N'Pencernaan'),
+    (N'R13',   N'Sulit menelan (disfagia)', N'Pencernaan'),
+    (N'R14',   N'Kembung (flatulensi)', N'Pencernaan'),
+    (N'R19.7', N'Diare (tidak spesifik)', N'Pencernaan'),
+    (N'T62.9', N'Keracunan makanan', N'Pencernaan'),
+
+    -- Gigi & mulut
+    (N'K02.9', N'Karies gigi (gigi berlubang)', N'Gigi & Mulut'),
+    (N'K04.0', N'Pulpitis', N'Gigi & Mulut'),
+    (N'K04.7', N'Abses periapikal', N'Gigi & Mulut'),
+    (N'K05.1', N'Gingivitis kronik (radang gusi)', N'Gigi & Mulut'),
+    (N'K05.3', N'Periodontitis kronik', N'Gigi & Mulut'),
+    (N'K08.8', N'Sakit gigi (gangguan gigi lainnya)', N'Gigi & Mulut'),
+    (N'K12.0', N'Sariawan (stomatitis aftosa berulang)', N'Gigi & Mulut'),
+
+    -- Kulit
+    (N'D23.9', N'Tumor jinak kulit', N'Kulit'),
+    (N'L02.9', N'Abses kulit dan furunkel (bisul)', N'Kulit'),
+    (N'L03.9', N'Selulitis', N'Kulit'),
+    (N'L05.9', N'Kista pilonidal', N'Kulit'),
+    (N'L08.9', N'Infeksi kulit lokal', N'Kulit'),
+    (N'L20.9', N'Dermatitis atopik', N'Kulit'),
+    (N'L21.9', N'Dermatitis seboroik', N'Kulit'),
+    (N'L23.9', N'Dermatitis kontak alergi', N'Kulit'),
+    (N'L24.9', N'Dermatitis kontak iritan', N'Kulit'),
+    (N'L25.9', N'Dermatitis kontak', N'Kulit'),
+    (N'L29.9', N'Pruritus (gatal)', N'Kulit'),
+    (N'L30.9', N'Dermatitis (tidak spesifik)', N'Kulit'),
+    (N'L40.0', N'Psoriasis vulgaris', N'Kulit'),
+    (N'L50.9', N'Urtikaria (biduran)', N'Kulit'),
+    (N'L55.9', N'Luka bakar matahari (sunburn)', N'Kulit'),
+    (N'L60.0', N'Kuku tumbuh ke dalam', N'Kulit'),
+    (N'L70.0', N'Akne vulgaris (jerawat)', N'Kulit'),
+    (N'L74.3', N'Biang keringat (miliaria)', N'Kulit'),
+    (N'L84',   N'Kalus dan klavus (kapalan)', N'Kulit'),
+    (N'L91.0', N'Keloid dan jaringan parut hipertrofik', N'Kulit'),
+    (N'L98.4', N'Ulkus kronik kulit', N'Kulit'),
+    (N'R21',   N'Ruam kulit', N'Kulit'),
+
+    -- Muskuloskeletal
+    (N'M06.9', N'Artritis reumatoid', N'Muskuloskeletal'),
+    (N'M10.9', N'Gout (asam urat)', N'Muskuloskeletal'),
+    (N'M17.9', N'Osteoartritis lutut', N'Muskuloskeletal'),
+    (N'M19.9', N'Osteoartritis', N'Muskuloskeletal'),
+    (N'M21.4', N'Kaki datar (pes planus)', N'Muskuloskeletal'),
+    (N'M25.5', N'Nyeri sendi', N'Muskuloskeletal'),
+    (N'M41.9', N'Skoliosis', N'Muskuloskeletal'),
+    (N'M47.9', N'Spondilosis', N'Muskuloskeletal'),
+    (N'M51.1', N'Gangguan diskus lumbal dengan radikulopati', N'Muskuloskeletal'),
+    (N'M51.2', N'Perpindahan diskus intervertebralis (HNP)', N'Muskuloskeletal'),
+    (N'M53.1', N'Sindrom servikobrakial', N'Muskuloskeletal'),
+    (N'M54.2', N'Nyeri leher (servikalgia)', N'Muskuloskeletal'),
+    (N'M54.3', N'Skiatika (nyeri saraf pinggul)', N'Muskuloskeletal'),
+    (N'M54.4', N'Nyeri punggung bawah dengan skiatika', N'Muskuloskeletal'),
+    (N'M54.5', N'Nyeri punggung bawah', N'Muskuloskeletal'),
+    (N'M54.6', N'Nyeri punggung (torakal)', N'Muskuloskeletal'),
+    (N'M54.9', N'Nyeri punggung (tidak spesifik)', N'Muskuloskeletal'),
+    (N'M62.6', N'Regangan otot', N'Muskuloskeletal'),
+    (N'M65.3', N'Jari picu (trigger finger)', N'Muskuloskeletal'),
+    (N'M65.9', N'Sinovitis dan tenosinovitis', N'Muskuloskeletal'),
+    (N'M72.2', N'Fasiitis plantaris', N'Muskuloskeletal'),
+    (N'M75.0', N'Kapsulitis adhesif bahu (frozen shoulder)', N'Muskuloskeletal'),
+    (N'M75.1', N'Sindrom rotator cuff bahu', N'Muskuloskeletal'),
+    (N'M77.1', N'Epikondilitis lateral (tennis elbow)', N'Muskuloskeletal'),
+    (N'M79.1', N'Mialgia (nyeri otot)', N'Muskuloskeletal'),
+    (N'M79.2', N'Neuralgia dan neuritis', N'Muskuloskeletal'),
+    (N'M79.6', N'Nyeri anggota gerak', N'Muskuloskeletal'),
+    (N'M81.9', N'Osteoporosis', N'Muskuloskeletal'),
+    (N'R25.2', N'Kram otot', N'Muskuloskeletal'),
+
+    -- Kardiovaskular
+    (N'I10',   N'Hipertensi esensial (tekanan darah tinggi)', N'Kardiovaskular'),
+    (N'I20.9', N'Angina pektoris', N'Kardiovaskular'),
+    (N'I21.9', N'Infark miokard akut (serangan jantung)', N'Kardiovaskular'),
+    (N'I25.9', N'Penyakit jantung iskemik kronik', N'Kardiovaskular'),
+    (N'I48',   N'Fibrilasi atrium', N'Kardiovaskular'),
+    (N'I49.9', N'Aritmia jantung', N'Kardiovaskular'),
+    (N'I50.9', N'Gagal jantung', N'Kardiovaskular'),
+    (N'I64',   N'Stroke', N'Kardiovaskular'),
+    (N'I83.9', N'Varises tungkai bawah', N'Kardiovaskular'),
+    (N'I95.9', N'Hipotensi (tekanan darah rendah)', N'Kardiovaskular'),
+    (N'R00.0', N'Takikardia (denyut jantung cepat)', N'Kardiovaskular'),
+    (N'R00.1', N'Bradikardia (denyut jantung lambat)', N'Kardiovaskular'),
+    (N'R03.0', N'Tekanan darah meningkat tanpa diagnosis hipertensi', N'Kardiovaskular'),
+    (N'R07.4', N'Nyeri dada', N'Kardiovaskular'),
+
+    -- Saraf
+    (N'G40.9', N'Epilepsi', N'Saraf'),
+    (N'G43.9', N'Migrain', N'Saraf'),
+    (N'G44.2', N'Sakit kepala tipe tegang', N'Saraf'),
+    (N'G47.0', N'Insomnia (gangguan tidur)', N'Saraf'),
+    (N'G47.3', N'Apnea tidur', N'Saraf'),
+    (N'G51.0', N'Kelumpuhan Bell', N'Saraf'),
+    (N'G56.0', N'Sindrom terowongan karpal', N'Saraf'),
+    (N'R20.2', N'Parestesia (kesemutan)', N'Saraf'),
+    (N'R42',   N'Pusing', N'Saraf'),
+    (N'R51',   N'Sakit kepala', N'Saraf'),
+    (N'R56.9', N'Kejang', N'Saraf'),
+
+    -- Jiwa
+    (N'F32.9', N'Depresi', N'Jiwa'),
+    (N'F41.9', N'Gangguan cemas', N'Jiwa'),
+    (N'F43.2', N'Gangguan penyesuaian', N'Jiwa'),
+    (N'F51.0', N'Insomnia nonorganik', N'Jiwa'),
+
+    -- Metabolik & endokrin
+    (N'E03.9', N'Hipotiroidisme', N'Metabolik'),
+    (N'E05.9', N'Hipertiroidisme (tirotoksikosis)', N'Metabolik'),
+    (N'E10.9', N'Diabetes melitus tipe 1 tanpa komplikasi', N'Metabolik'),
+    (N'E11.9', N'Diabetes melitus tipe 2 tanpa komplikasi', N'Metabolik'),
+    (N'E14.9', N'Diabetes melitus tanpa komplikasi (tidak spesifik)', N'Metabolik'),
+    (N'E16.2', N'Hipoglikemia', N'Metabolik'),
+    (N'E55.9', N'Defisiensi vitamin D', N'Metabolik'),
+    (N'E66.9', N'Obesitas', N'Metabolik'),
+    (N'E78.0', N'Hiperkolesterolemia', N'Metabolik'),
+    (N'E78.2', N'Hiperlipidemia campuran', N'Metabolik'),
+    (N'E78.5', N'Hiperlipidemia (kolesterol / lemak darah tinggi)', N'Metabolik'),
+    (N'E79.0', N'Hiperurisemia (asam urat tinggi)', N'Metabolik'),
+    (N'E86',   N'Dehidrasi (kekurangan cairan)', N'Metabolik'),
+    (N'E87.6', N'Hipokalemia', N'Metabolik'),
+    (N'R63.0', N'Anoreksia (tidak nafsu makan)', N'Metabolik'),
+    (N'R63.4', N'Penurunan berat badan abnormal', N'Metabolik'),
+
+    -- Darah
+    (N'D50.9', N'Anemia defisiensi besi', N'Darah'),
+    (N'D64.9', N'Anemia', N'Darah'),
+    (N'R59.9', N'Pembesaran kelenjar getah bening', N'Darah'),
+
+    -- Urogenital
+    (N'I86.1', N'Varikokel', N'Urogenital'),
+    (N'N10',   N'Pielonefritis akut', N'Urogenital'),
+    (N'N13.3', N'Hidronefrosis', N'Urogenital'),
+    (N'N17.9', N'Gagal ginjal akut', N'Urogenital'),
+    (N'N18.9', N'Penyakit ginjal kronik', N'Urogenital'),
+    (N'N20.0', N'Batu ginjal', N'Urogenital'),
+    (N'N20.1', N'Batu ureter', N'Urogenital'),
+    (N'N20.9', N'Batu saluran kemih (BSK)', N'Urogenital'),
+    (N'N23',   N'Kolik ginjal', N'Urogenital'),
+    (N'N30.0', N'Sistitis akut (radang kandung kemih)', N'Urogenital'),
+    (N'N39.0', N'Infeksi saluran kemih (ISK)', N'Urogenital'),
+    (N'N40',   N'Pembesaran prostat jinak', N'Urogenital'),
+    (N'N41.9', N'Prostatitis', N'Urogenital'),
+    (N'N43.3', N'Hidrokel', N'Urogenital'),
+    (N'N45.9', N'Orkitis / epididimitis', N'Urogenital'),
+    (N'N47',   N'Fimosis dan parafimosis', N'Urogenital'),
+    (N'N76.0', N'Vaginitis akut', N'Urogenital'),
+    (N'N94.6', N'Dismenore (nyeri haid)', N'Urogenital'),
+    (N'R30.0', N'Nyeri saat berkemih (disuria)', N'Urogenital'),
+    (N'R31',   N'Hematuria (kencing darah)', N'Urogenital'),
+    (N'R33',   N'Retensi urin', N'Urogenital'),
+    (N'R35',   N'Poliuria (sering kencing)', N'Urogenital'),
+
+    -- Cedera
+    (N'S00.9', N'Cedera superfisial kepala', N'Cedera'),
+    (N'S01.1', N'Luka terbuka kelopak mata dan sekitar mata', N'Cedera'),
+    (N'S01.9', N'Luka terbuka kepala', N'Cedera'),
+    (N'S02.9', N'Fraktur tengkorak dan tulang wajah', N'Cedera'),
+    (N'S06.0', N'Gegar otak (komosio serebri)', N'Cedera'),
+    (N'S09.9', N'Cedera kepala', N'Cedera'),
+    (N'S13.4', N'Keseleo dan regangan leher', N'Cedera'),
+    (N'S22.4', N'Fraktur iga multipel', N'Cedera'),
+    (N'S30.0', N'Memar pinggang dan panggul', N'Cedera'),
+    (N'S33.5', N'Keseleo dan regangan tulang belakang lumbal', N'Cedera'),
+    (N'S39.0', N'Cedera otot dan tendon perut / punggung bawah', N'Cedera'),
+    (N'S40.0', N'Memar bahu dan lengan atas', N'Cedera'),
+    (N'S42.9', N'Fraktur bahu (gelang bahu)', N'Cedera'),
+    (N'S50.0', N'Memar siku', N'Cedera'),
+    (N'S52.9', N'Fraktur lengan bawah', N'Cedera'),
+    (N'S60.0', N'Memar jari tangan', N'Cedera'),
+    (N'S61.0', N'Luka terbuka jari tangan tanpa kerusakan kuku', N'Cedera'),
+    (N'S61.1', N'Luka terbuka jari tangan dengan kerusakan kuku', N'Cedera'),
+    (N'S61.9', N'Luka terbuka pergelangan tangan dan tangan', N'Cedera'),
+    (N'S62.9', N'Fraktur pergelangan tangan dan tangan', N'Cedera'),
+    (N'S63.5', N'Keseleo dan regangan pergelangan tangan', N'Cedera'),
+    (N'S70.0', N'Memar panggul', N'Cedera'),
+    (N'S72.9', N'Fraktur tulang paha (femur)', N'Cedera'),
+    (N'S80.0', N'Memar lutut', N'Cedera'),
+    (N'S80.1', N'Memar tungkai bawah', N'Cedera'),
+    (N'S81.9', N'Luka terbuka tungkai bawah', N'Cedera'),
+    (N'S82.9', N'Fraktur tungkai bawah', N'Cedera'),
+    (N'S83.6', N'Keseleo dan regangan lutut', N'Cedera'),
+    (N'S90.0', N'Memar pergelangan kaki', N'Cedera'),
+    (N'S91.3', N'Luka terbuka kaki', N'Cedera'),
+    (N'S92.9', N'Fraktur kaki', N'Cedera'),
+    (N'S93.4', N'Keseleo dan regangan pergelangan kaki', N'Cedera'),
+    (N'T07',   N'Cedera multipel', N'Cedera'),
+    (N'T14.0', N'Cedera superfisial (memar / lecet)', N'Cedera'),
+    (N'T14.1', N'Luka terbuka', N'Cedera'),
+    (N'T14.2', N'Fraktur (lokasi tidak spesifik)', N'Cedera'),
+    (N'T14.3', N'Dislokasi, keseleo dan regangan (lokasi tidak spesifik)', N'Cedera'),
+    (N'T14.9', N'Cedera (tidak spesifik)', N'Cedera'),
+    (N'T17.9', N'Benda asing di saluran napas', N'Cedera'),
+    (N'T18.9', N'Benda asing di saluran cerna', N'Cedera'),
+    (N'T30.0', N'Luka bakar', N'Cedera'),
+    (N'T30.1', N'Luka bakar derajat 1', N'Cedera'),
+    (N'T30.2', N'Luka bakar derajat 2', N'Cedera'),
+    (N'T30.3', N'Luka bakar derajat 3', N'Cedera'),
+
+    -- Keracunan & lingkungan
+    (N'T58',   N'Keracunan karbon monoksida', N'Keracunan & Lingkungan'),
+    (N'T63.0', N'Gigitan ular berbisa', N'Keracunan & Lingkungan'),
+    (N'T63.4', N'Sengatan / gigitan serangga berbisa', N'Keracunan & Lingkungan'),
+    (N'T65.9', N'Keracunan (tidak spesifik)', N'Keracunan & Lingkungan'),
+    (N'T67.0', N'Sengatan panas (heat stroke)', N'Keracunan & Lingkungan'),
+    (N'T67.2', N'Kram akibat panas', N'Keracunan & Lingkungan'),
+    (N'T67.5', N'Kelelahan akibat panas (heat exhaustion)', N'Keracunan & Lingkungan'),
+    (N'T67.9', N'Efek panas dan cahaya', N'Keracunan & Lingkungan'),
+    (N'T75.4', N'Efek arus listrik (tersengat listrik)', N'Keracunan & Lingkungan'),
+    (N'T78.2', N'Syok anafilaktik', N'Keracunan & Lingkungan'),
+    (N'T78.3', N'Angioedema', N'Keracunan & Lingkungan'),
+    (N'T78.4', N'Alergi', N'Keracunan & Lingkungan'),
+
+    -- Gejala umum
+    (N'R50.9', N'Demam', N'Umum'),
+    (N'R52.0', N'Nyeri akut', N'Umum'),
+    (N'R52.9', N'Nyeri (tidak spesifik)', N'Umum'),
+    (N'R53',   N'Kelelahan (malaise)', N'Umum'),
+    (N'R55',   N'Pingsan (sinkop)', N'Umum'),
+    (N'R58',   N'Perdarahan', N'Umum'),
+    (N'R60.9', N'Edema (bengkak)', N'Umum'),
+    (N'D17.9', N'Lipoma', N'Umum'),
+
+    -- Pemeriksaan & administratif
+    (N'Z00.0', N'Pemeriksaan kesehatan umum', N'Pemeriksaan'),
+    (N'Z02.1', N'Pemeriksaan kesehatan pra-kerja', N'Pemeriksaan'),
+    (N'Z02.7', N'Penerbitan surat keterangan medis', N'Pemeriksaan'),
+    (N'Z03.9', N'Observasi dugaan penyakit', N'Pemeriksaan'),
+    (N'Z10.0', N'Pemeriksaan kesehatan okupasi / berkala', N'Pemeriksaan'),
+    (N'Z48.0', N'Perawatan luka (ganti balutan / lepas jahitan)', N'Pemeriksaan'),
+    (N'Z76.0', N'Penerbitan resep ulang', N'Pemeriksaan')
+) v(Kode, Name, Kategori)
+WHERE NOT EXISTS (SELECT 1 FROM dbo.Diseases d WHERE d.Kode = v.Kode)
+  AND NOT EXISTS (SELECT 1 FROM dbo.Diseases d WHERE d.Name = v.Name);
+
+DECLARE @n INT = @@ROWCOUNT;
+PRINT 'Diagnosa ICD-10 baru ditambahkan: ' + CAST(@n AS VARCHAR(10));
+GO

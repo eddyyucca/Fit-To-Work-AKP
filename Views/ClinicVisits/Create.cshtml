@@ -61,7 +61,8 @@
                                 <optgroup label="@grp.Key">
                                     @foreach (var d in grp)
                                     {
-                                        <option value="@d.Id">@d.DisplayName</option>
+                                        @* Pilihan menampilkan nama Indonesia + nama Inggris ICD-10 (supaya bisa dicari dua bahasa); chip yang terpilih tetap memakai nama Indonesia saja *@
+                                        <option value="@d.Id" data-label="@d.DisplayName">@d.DisplayName@(string.IsNullOrWhiteSpace(d.NameEn) ? "" : " | " + d.NameEn)</option>
                                     }
                                 </optgroup>
                             }
@@ -198,7 +199,8 @@
             const addDx = () => {
                 const id = dxSelect.value;
                 if (!id || dxChips.querySelector(`[data-id="${id}"]`)) { dxSelect.value = ''; return; }
-                const label = dxSelect.options[dxSelect.selectedIndex].text;
+                const opt = dxSelect.options[dxSelect.selectedIndex];
+                const label = opt.dataset.label || opt.text;
                 dxChips.insertAdjacentHTML('beforeend',
                     `<span class="badge text-bg-primary dx-chip" data-id="${esc(id)}">${esc(label)}<input type="hidden" name="DiseaseIds" value="${esc(id)}" /><button type="button" aria-label="Hapus">×</button></span>`);
                 dxSelect.value = '';

@@ -91,15 +91,15 @@ namespace FitToWorkApp.Repositories
             if (d.Id > 0)
             {
                 await conn.ExecuteAsync(@"
-                    UPDATE dbo.Diseases SET Kode = @Kode, Name = @Name, Kategori = @Kategori, IsActive = @IsActive
+                    UPDATE dbo.Diseases SET Kode = @Kode, Name = @Name, NameEn = @NameEn, Kategori = @Kategori, IsActive = @IsActive
                     WHERE Id = @Id", d);
                 return d.Id;
             }
 
             return await conn.ExecuteScalarAsync<int>(@"
-                INSERT INTO dbo.Diseases (Kode, Name, Kategori, IsActive, CreatedAt)
+                INSERT INTO dbo.Diseases (Kode, Name, NameEn, Kategori, IsActive, CreatedAt)
                 OUTPUT INSERTED.Id
-                VALUES (@Kode, @Name, @Kategori, @IsActive, SYSUTCDATETIME())", d);
+                VALUES (@Kode, @Name, @NameEn, @Kategori, @IsActive, SYSUTCDATETIME())", d);
         }
 
         public async Task SetDiseaseActiveAsync(int id, bool active)
