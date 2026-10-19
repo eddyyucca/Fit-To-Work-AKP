@@ -30,6 +30,7 @@ builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IDashboardExtraRepository, DashboardExtraRepository>();
 builder.Services.AddScoped<IClinicReportRepository, ClinicReportRepository>();
 builder.Services.AddScoped<IFtwReportRepository, FtwReportRepository>();
+builder.Services.AddScoped<IClinicTriageRepository, ClinicTriageRepository>();
 builder.Services.AddScoped<IGymRepository, GymRepository>();
 builder.Services.AddScoped<IActivityTypeRepository, ActivityTypeRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();

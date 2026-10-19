@@ -12,7 +12,11 @@ namespace FitToWorkApp.Repositories
         /// Simpan kunjungan + diagnosa + obat dalam 1 transaksi, sekaligus memotong stok obat.
         /// Melempar <see cref="StockException"/> kalau stok tidak cukup (tidak ada yang tersimpan).
         /// </summary>
-        Task<int> CreateAsync(ClinicVisit visit, IEnumerable<int> diseaseIds, IEnumerable<VisitMedicineInput> medicines);
+        /// <param name="triageId">
+        /// Kalau diisi, kunjungan ini memfinalkan pemeriksaan awal perawat: draft itu ditandai Selesai di TRANSAKSI YANG SAMA.
+        /// Melempar <see cref="TriageStateException"/> kalau draft sudah tidak berstatus Draft (tidak ada yang tersimpan).
+        /// </param>
+        Task<int> CreateAsync(ClinicVisit visit, IEnumerable<int> diseaseIds, IEnumerable<VisitMedicineInput> medicines, int? triageId = null);
 
         Task<ClinicVisit?> GetByIdAsync(int id);
 
@@ -36,7 +40,7 @@ namespace FitToWorkApp.Repositories
             _connectionFactory = connectionFactory;
         }
 
-        public async Task<int> CreateAsync(ClinicVisit v, IEnumerable<int> diseaseIds, IEnumerable<VisitMedicineInput> medicines)
+        public async Task<int> CreateAsync(ClinicVisit v, IEnumerable<int> diseaseIds, IEnumerable<VisitMedicineInput> medicines, int? triageId = null)
         {
             using var conn = _connectionFactory.CreateConnection();
             conn.Open();
@@ -89,6 +93,18 @@ namespace FitToWorkApp.Repositories
 
                     await MedicalMasterRepository.InsertMovementAsync(conn, tx, med.Id, StockMovementTypes.Keluar, -m.Qty, stokBaru,
                         id, $"Kunjungan klinik #{id} - {v.NamaSnapshot}", v.ExaminerAdminId, v.ExaminerName);
+                }
+
+                // Memfinalkan pemeriksaan awal perawat: ditandai Selesai di transaksi yang sama (cegah kunjungan ganda dari 1 draft)
+                if (triageId.HasValue)
+                {
+                    var n = await conn.ExecuteAsync(@"
+                        UPDATE dbo.ClinicTriages
+                        SET Status = 'Selesai', VisitId = @VisitId, FinalizedAt = SYSUTCDATETIME(), UpdatedAt = SYSUTCDATETIME()
+                        WHERE Id = @TriageId AND Status = 'Draft' AND EmployeeId = @EmployeeId",
+                        new { VisitId = id, TriageId = triageId.Value, v.EmployeeId }, tx);
+                    if (n == 0)
+                        throw new TriageStateException("Pemeriksaan awal ini sudah difinalkan atau dibatalkan oleh pengguna lain. Tidak ada data yang tersimpan.");
                 }
 
                 tx.Commit();

@@ -1,11 +1,15 @@
 @* Pemilih karyawan untuk form medis. Model: (int? EmployeeId, string? Label). Butuh wwwroot/js/employee-picker.js
-   Set ViewData["PickerIncludeMitra"] = true sebelum memanggil partial ini supaya karyawan mitra ikut dicari. *@
+   Set ViewData["PickerIncludeMitra"] = true sebelum memanggil partial ini supaya karyawan mitra ikut dicari.
+   ViewData["PickerController"] = nama controller pencarian (default "MedicalRecord"; perawat memakai "ClinicTriages").
+   ViewData["PickerLocked"] = true menyembunyikan tombol "Ganti" (pasien sudah ditentukan, mis. dari pemeriksaan awal perawat). *@
 @model (int? EmployeeId, string? Label)
 @{
     var includeMitra = ViewData["PickerIncludeMitra"] is true;
+    var searchController = ViewData["PickerController"] as string ?? "MedicalRecord";
+    var locked = ViewData["PickerLocked"] is true;
     var searchUrl = includeMitra
-        ? Url.Action("SearchEmployee", "MedicalRecord", new { includeMitra = true })
-        : Url.Action("SearchEmployee", "MedicalRecord");
+        ? Url.Action("SearchEmployee", searchController, new { includeMitra = true })
+        : Url.Action("SearchEmployee", searchController);
     var placeholder = includeMitra
         ? "Ketik NIP / ID mitra (mis. GPE-3450) atau nama (min. 2 huruf)…"
         : "Ketik NIP atau nama karyawan (min. 2 huruf)…";
@@ -16,7 +20,7 @@
         <span class="input-group-text">🔍</span>
         <input type="text" class="form-control ep-input" placeholder="@placeholder"
                autocomplete="off" value="@Model.Label" @(Model.EmployeeId.HasValue ? "readonly" : "") />
-        <button type="button" class="btn btn-outline-secondary ep-clear @(Model.EmployeeId.HasValue ? "" : "d-none")">Ganti</button>
+        <button type="button" class="btn btn-outline-secondary ep-clear @(Model.EmployeeId.HasValue && !locked ? "" : "d-none")">Ganti</button>
     </div>
     <div class="list-group position-absolute w-100 shadow ep-results" style="z-index:1050; max-height:320px; overflow:auto;"></div>
     <div class="small text-muted mt-1 ep-info"></div>

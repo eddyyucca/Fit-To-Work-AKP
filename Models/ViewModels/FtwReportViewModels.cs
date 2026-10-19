@@ -90,10 +90,13 @@ namespace FitToWorkApp.Models.ViewModels
         public DateTime? KlinikUtc { get; set; }             // kunjungan klinik dalam 48 jam berikutnya (hanya kalau boleh dilihat)
         public string? KlinikRekomendasi { get; set; }
         public int? KlinikHariIstirahat { get; set; }
+        public int? TriageId { get; set; }                   // pemeriksaan awal perawat (draft / selesai) untuk kejadian ini
+        public string? TriageStatus { get; set; }            // Draft | Selesai
+        public int? TriageVisitId { get; set; }
 
         // Diisi controller
         public string Status { get; set; } = string.Empty;
-        public string StatusKode { get; set; } = string.Empty;   // belum | klinik | isiulang
+        public string StatusKode { get; set; } = string.Empty;   // belum | triage | klinik | isiulang
         public bool Prioritas { get; set; }
         public int JamTerbuka { get; set; }                      // jam sejak pengisian (untuk yang belum ada tindak lanjut)
     }
@@ -146,6 +149,9 @@ namespace FitToWorkApp.Models.ViewModels
         public List<string> Departments { get; set; } = new();
         public DateTime GeneratedAt { get; set; }
         public bool CanSeeClinic { get; set; }
+        public bool CanTriage { get; set; }              // boleh memulai pemeriksaan awal (medical.triage / medical.visit)
+        public bool CanDoctor { get; set; }              // boleh melanjutkan sebagai dokter (medical.visit)
+        public bool TriageAvailable { get; set; }        // tabel pemeriksaan awal sudah ada di database
         public bool Truncated { get; set; }
 
         public int Kejadian { get; set; }
@@ -153,6 +159,7 @@ namespace FitToWorkApp.Models.ViewModels
         public int Belum { get; set; }
         public int BelumPrioritas { get; set; }
         public int Klinik { get; set; }
+        public int MenungguDokter { get; set; }
         public int IsiUlang { get; set; }
 
         public List<FtwFollowUpRow> Rows { get; set; } = new();

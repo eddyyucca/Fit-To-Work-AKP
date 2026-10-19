@@ -1,0 +1,95 @@
+@model ClinicTriage
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Detail Pemeriksaan Awal";
+    Layout = "_AdminLayout";
+    var canDoctor = (bool)ViewBag.CanDoctor;
+    string Local(DateTime? utc) => utc is null ? "-" : Clock.ToLocal(DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc)).ToString("dd/MM/yyyy HH:mm");
+    string Dash(object? v) => v is null ? "-" : v.ToString()!;
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="small text-decoration-none">‹ Kembali ke Pemeriksaan Awal</a>
+    <h4 class="mb-0 mt-1">Pemeriksaan Awal #@Model.Id <span class="badge @TriageStatuses.BadgeClass(Model.Status) fs-6 align-middle">@TriageStatuses.Label(Model.Status)</span></h4>
+    <div class="text-muted">@Model.NamaSnapshot · @Model.NIP · @Model.DepartmentSnapshot · @Model.SectionSnapshot</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold">Pemeriksaan awal oleh perawat</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Waktu</dt><dd class="col-sm-8">@Local(Model.TriageAt)</dd>
+                    <dt class="col-sm-4">Perawat</dt><dd class="col-sm-8">@Model.NurseName</dd>
+                    <dt class="col-sm-4">Keluhan</dt><dd class="col-sm-8">@Model.Keluhan</dd>
+                    <dt class="col-sm-4">Catatan perawat</dt><dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.CatatanPerawat) ? "-" : Model.CatatanPerawat)</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Tanda vital</div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-3"><div class="text-muted small">Tekanan darah</div><div class="fs-5 fw-semibold">@(Model.Sistolik.HasValue || Model.Diastolik.HasValue ? $"{Dash(Model.Sistolik)}/{Dash(Model.Diastolik)}" : "-")</div><div class="small text-muted">mmHg</div></div>
+                    <div class="col-6 col-md-3"><div class="text-muted small">Nadi</div><div class="fs-5 fw-semibold">@Dash(Model.Nadi)</div><div class="small text-muted">x/menit</div></div>
+                    <div class="col-6 col-md-3"><div class="text-muted small">Suhu</div><div class="fs-5 fw-semibold">@(Model.Suhu.HasValue ? Model.Suhu.Value.ToString("0.0") : "-")</div><div class="small text-muted">°C</div></div>
+                    <div class="col-6 col-md-3"><div class="text-muted small">Frekuensi napas</div><div class="fs-5 fw-semibold">@Dash(Model.Napas)</div><div class="small text-muted">x/menit</div></div>
+                    <div class="col-6 col-md-3"><div class="text-muted small">SpO2</div><div class="fs-5 fw-semibold">@Dash(Model.Spo2)</div><div class="small text-muted">%</div></div>
+                    <div class="col-6 col-md-3"><div class="text-muted small">Berat badan</div><div class="fs-5 fw-semibold">@(Model.BeratBadan.HasValue ? Model.BeratBadan.Value.ToString("0.#") : "-")</div><div class="small text-muted">kg</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        @if (Model.IsDraft)
+        {
+            <div class="d-grid gap-2 mb-3">
+                @if (canDoctor)
+                {
+                    <a class="btn btn-primary btn-lg" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@Model.Id">Lanjutkan Pemeriksaan (Dokter)</a>
+                }
+                else
+                {
+                    <div class="alert alert-info small mb-0">Draft ini menunggu dokter. Dokter membukanya dari menu Pemeriksaan Awal dan melanjutkan pemeriksaan detail.</div>
+                }
+                <a class="btn btn-outline-secondary" asp-action="Edit" asp-route-id="@Model.Id">Ubah draft</a>
+            </div>
+            <div class="card border-danger-subtle">
+                <div class="card-body">
+                    <h6 class="text-danger">Batalkan pemeriksaan awal</h6>
+                    <p class="small text-muted">Untuk salah pasien atau salah input. Data tetap tersimpan sebagai jejak.</p>
+                    <form asp-action="Cancel" asp-route-id="@Model.Id" method="post"
+                          data-confirm="Batalkan pemeriksaan awal ini?" data-confirm-ok="Ya, Batalkan">
+                        <input name="reason" class="form-control form-control-sm mb-2" maxlength="250" required placeholder="Alasan pembatalan" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Batalkan</button>
+                    </form>
+                </div>
+            </div>
+        }
+        else if (Model.Status == TriageStatuses.Selesai)
+        {
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="fw-semibold mb-1">Sudah difinalkan dokter</div>
+                    <div class="small text-muted mb-2">Difinalkan: @Local(Model.FinalizedAt)</div>
+                    @if (canDoctor && Model.VisitId.HasValue)
+                    {
+                        <a class="btn btn-outline-primary" asp-controller="ClinicVisits" asp-action="Detail" asp-route-id="@Model.VisitId">Lihat Kunjungan Klinik #@Model.VisitId</a>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm">
+                <div class="card-body small">
+                    <div class="fw-semibold mb-1">Dibatalkan</div>
+                    <div>@Local(Model.CancelledAt) oleh @Model.CancelledBy</div>
+                    <div class="text-muted">Alasan: @Model.CancelReason</div>
+                </div>
+            </div>
+        }
+    </div>
+</div>

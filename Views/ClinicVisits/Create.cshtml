@@ -1,6 +1,9 @@
 @model FitToWorkApp.Controllers.Admin.VisitFormViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
 @{
-    ViewData["Title"] = "Catat Kunjungan Klinik";
+    var triage = ViewBag.Triage as ClinicTriage;
+    var triageMode = Model.TriageId.HasValue;
+    ViewData["Title"] = triageMode ? "Lanjutkan Pemeriksaan (Dokter)" : "Catat Kunjungan Klinik";
     Layout = "_AdminLayout";
     var diseases = (List<Disease>)ViewBag.Diseases;
     var medicines = (List<Medicine>)ViewBag.MedicineList;
@@ -17,11 +20,37 @@
 
 <div class="mb-4">
     <a asp-controller="ClinicVisits" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Kunjungan Klinik</a>
-    <h4 class="mb-0 mt-1">Catat Kunjungan Klinik</h4>
+    <h4 class="mb-0 mt-1">@(triageMode ? "Lanjutkan Pemeriksaan (Dokter)" : "Catat Kunjungan Klinik")</h4>
+    @if (triageMode)
+    {
+        <div class="text-muted small">Lengkapi pemeriksaan detail, pilih diagnosa ICD-10, obat, dan rekomendasi, lalu <strong>finalkan</strong>.</div>
+    }
 </div>
 
 <form asp-controller="ClinicVisits" asp-action="Create" method="post" id="visitForm" autocomplete="off">
     <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+    @if (triageMode)
+    {
+        <input type="hidden" name="TriageId" value="@Model.TriageId" />
+    }
+    @if (triage is not null)
+    {
+        <div class="card shadow-sm mb-3 border-warning">
+            <div class="card-header bg-warning-subtle fw-semibold d-flex justify-content-between flex-wrap gap-1">
+                <span>Pemeriksaan awal perawat (draft)</span>
+                <span class="small fw-normal">@triage.NurseName &middot; @Clock.ToLocal(triage.TriageAt).ToString("dd/MM/yyyy HH:mm") &middot; <a asp-controller="ClinicTriages" asp-action="Detail" asp-route-id="@triage.Id" target="_blank" rel="noopener">buka</a></span>
+            </div>
+            <div class="card-body py-2 small">
+                <div><strong>Keluhan:</strong> @triage.Keluhan</div>
+                <div><strong>Tanda vital:</strong> @(string.IsNullOrEmpty(triage.VitalSummary()) ? "tidak dicatat" : triage.VitalSummary())</div>
+                @if (!string.IsNullOrWhiteSpace(triage.CatatanPerawat))
+                {
+                    <div><strong>Catatan perawat:</strong> @triage.CatatanPerawat</div>
+                }
+                <div class="text-muted mt-1">Keluhan dan hasil pemeriksaan di bawah sudah terisi dari catatan perawat dan bisa Anda ubah. Setelah difinalkan, draft ini ditandai selesai.</div>
+            </div>
+        </div>
+    }
 
     <div class="row g-3">
         <div class="col-lg-8">
@@ -30,7 +59,7 @@
                     <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label">Karyawan / Pasien</label>
-                            @{ ViewData["PickerIncludeMitra"] = true; }
+                            @{ ViewData["PickerIncludeMitra"] = true; ViewData["PickerLocked"] = triageMode; }
                             <partial name="_EmployeePicker" model="(Model.EmployeeId, Model.EmployeeLabel)" />
                         </div>
                         <div class="col-md-4">
@@ -52,22 +81,15 @@
                         <label class="form-label" asp-for="Pemeriksaan">Hasil Pemeriksaan <span class="text-muted small">(opsional)</span></label>
                         <textarea asp-for="Pemeriksaan" class="form-control" rows="2" maxlength="1000" placeholder="mis. TD 130/85, suhu 38,2°C, faring hiperemis"></textarea>
                     </div>
-                    <label class="form-label">Jenis Penyakit / Diagnosa</label>
-                    <div class="input-group">
-                        <select class="form-select" id="dxSelect">
-                            <option value="">— pilih jenis penyakit —</option>
-                            @foreach (var grp in diseases.GroupBy(d => d.Kategori ?? "Lainnya"))
-                            {
-                                <optgroup label="@grp.Key">
-                                    @foreach (var d in grp)
-                                    {
-                                        @* Pilihan menampilkan nama Indonesia + nama Inggris ICD-10 (supaya bisa dicari dua bahasa); chip yang terpilih tetap memakai nama Indonesia saja *@
-                                        <option value="@d.Id" data-label="@d.DisplayName">@d.DisplayName@(string.IsNullOrWhiteSpace(d.NameEn) ? "" : " | " + d.NameEn)</option>
-                                    }
-                                </optgroup>
-                            }
-                        </select>
-                        <button type="button" class="btn btn-outline-primary" id="dxAdd">Tambah</button>
+                    <label class="form-label" for="dxInput">Jenis Penyakit / Diagnosa (ICD-10)</label>
+                    <div class="position-relative" id="dxPicker">
+                        <div class="input-group">
+                            <span class="input-group-text">🔍</span>
+                            <input type="text" class="form-control" id="dxInput" autocomplete="off" disabled="@(diseases.Count == 0)"
+                                   placeholder="Cari kode ICD-10 atau nama penyakit (Indonesia / Inggris)…" aria-describedby="dxHelp" />
+                        </div>
+                        <div class="list-group position-absolute w-100 shadow d-none" id="dxList" style="z-index:1050; max-height:340px; overflow:auto;"></div>
+                        <div class="form-text" id="dxHelp">Ketik kode (mis. <code>N20</code>), nama (mis. <em>batu ginjal</em>), atau nama Inggris. &uarr;&darr; memilih, Enter menambah. Bisa lebih dari satu diagnosa.</div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mt-2" id="dxChips">
                         @foreach (var id in Model.DiseaseIds)
@@ -177,8 +199,15 @@
                 </div>
             </div>
             <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary btn-lg">Simpan Kunjungan</button>
-                <a asp-controller="ClinicVisits" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+                <button type="submit" class="btn btn-primary btn-lg">@(triageMode ? "Finalkan Kunjungan" : "Simpan Kunjungan")</button>
+                @if (triageMode)
+                {
+                    <a asp-controller="ClinicTriages" asp-action="Index" class="btn btn-outline-secondary">Kembali ke antrian</a>
+                }
+                else
+                {
+                    <a asp-controller="ClinicVisits" asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+                }
             </div>
         </div>
     </div>
@@ -186,6 +215,7 @@
 
 @section Scripts {
     <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    <script src="~/js/dx-picker.js" asp-append-version="true"></script>
     <script>
         (function () {
             // Kalender Flatpickr (datepicker.js); fallback ke input biasa kalau CDN gagal dimuat
@@ -193,20 +223,22 @@
             const form = document.getElementById('visitForm');
             const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-            // ---------- Diagnosa (chips) ----------
-            const dxSelect = document.getElementById('dxSelect');
+            // ---------- Diagnosa (pencarian ICD-10 + chips) ----------
             const dxChips = document.getElementById('dxChips');
-            const addDx = () => {
-                const id = dxSelect.value;
-                if (!id || dxChips.querySelector(`[data-id="${id}"]`)) { dxSelect.value = ''; return; }
-                const opt = dxSelect.options[dxSelect.selectedIndex];
-                const label = opt.dataset.label || opt.text;
+            const dxData = @Json.Serialize(diseases.Select(d => new { id = d.Id, kode = d.Kode, name = d.Name, en = d.NameEn, kat = d.Kategori, label = d.DisplayName }));
+            const hasDx = (id) => !!dxChips.querySelector(`[data-id="${id}"]`);
+            const addDx = (it) => {
+                if (hasDx(it.id)) return;
                 dxChips.insertAdjacentHTML('beforeend',
-                    `<span class="badge text-bg-primary dx-chip" data-id="${esc(id)}">${esc(label)}<input type="hidden" name="DiseaseIds" value="${esc(id)}" /><button type="button" aria-label="Hapus">×</button></span>`);
-                dxSelect.value = '';
+                    `<span class="badge text-bg-primary dx-chip" data-id="${esc(it.id)}">${esc(it.label)}<input type="hidden" name="DiseaseIds" value="${esc(it.id)}" /><button type="button" aria-label="Hapus">×</button></span>`);
             };
-            document.getElementById('dxAdd').addEventListener('click', addDx);
-            dxSelect.addEventListener('change', addDx);
+            AkpDxPicker.init({
+                input: document.getElementById('dxInput'),
+                list: document.getElementById('dxList'),
+                data: dxData,
+                isSelected: hasDx,
+                onSelect: addDx
+            });
             dxChips.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') e.target.closest('.dx-chip').remove(); });
 
             // ---------- Obat ----------

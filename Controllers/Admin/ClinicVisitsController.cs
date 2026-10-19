@@ -45,6 +45,9 @@ namespace FitToWorkApp.Controllers.Admin
         public string? CatatanRekomendasi { get; set; }
 
         public string? EmployeeLabel { get; set; }
+
+        /// <summary>Kalau diisi, kunjungan ini melanjutkan pemeriksaan awal perawat (draft) dan memfinalkannya.</summary>
+        public int? TriageId { get; set; }
     }
 
     /// <summary>Riwayat pasien yang tampil di form kunjungan klinik setelah nama pasien dipilih.</summary>
@@ -80,14 +83,17 @@ namespace FitToWorkApp.Controllers.Admin
         private readonly IDrugAlcoholTestRepository _drugTestRepository;
         private readonly IPermissionService _permissionService;
         private readonly IMitraRepository _mitraRepository;
+        private readonly IClinicTriageRepository _triageRepo;
 
         public const int MaxHariIstirahat = 60;
 
         public ClinicVisitsController(IClinicVisitRepository repo, IMedicalMasterRepository masterRepo,
             IEmployeeRepository employeeRepository, IOrganizationRepository orgRepository, IAppClock clock,
             IDashboardNotifier dashboardNotifier, IHealthCheckupRepository checkupRepository,
-            IDrugAlcoholTestRepository drugTestRepository, IPermissionService permissionService, IMitraRepository mitraRepository)
+            IDrugAlcoholTestRepository drugTestRepository, IPermissionService permissionService, IMitraRepository mitraRepository,
+            IClinicTriageRepository triageRepo)
         {
+            _triageRepo = triageRepo;
             _mitraRepository = mitraRepository;
             _dashboardNotifier = dashboardNotifier;
             _checkupRepository = checkupRepository;
@@ -110,6 +116,7 @@ namespace FitToWorkApp.Controllers.Admin
             ViewBag.Departments = (await _orgRepository.GetDepartmentsAsync()).Select(d => d.Name)
                 .Concat((await _mitraRepository.GetAllAsync()).Select(m => m.Nama))
                 .Distinct().OrderBy(n => n).ToList();
+            ViewBag.DraftTriages = await _triageRepo.CountDraftAsync();
             return View();
         }
 
@@ -146,9 +153,31 @@ namespace FitToWorkApp.Controllers.Admin
         }
 
         [HttpGet("Create")]
-        public async Task<IActionResult> Create(int? employeeId)
+        public async Task<IActionResult> Create(int? employeeId, int? triageId)
         {
             var model = new VisitFormViewModel { VisitAt = CheckupsController.TrimToMinute(_clock.LocalNow) };
+
+            // Melanjutkan pemeriksaan awal perawat: pasien, keluhan, dan tanda vital terisi dari draft
+            if (triageId.HasValue)
+            {
+                var triage = await _triageRepo.GetByIdAsync(triageId.Value);
+                if (triage is null || !triage.IsDraft)
+                {
+                    TempData["Error"] = triage is null
+                        ? "Pemeriksaan awal tidak ditemukan."
+                        : "Pemeriksaan awal ini sudah difinalkan atau dibatalkan.";
+                    return RedirectToAction("Index", "ClinicTriages");
+                }
+                model.TriageId = triage.Id;
+                model.EmployeeId = triage.EmployeeId;
+                model.EmployeeLabel = $"{triage.NIP} - {triage.NamaSnapshot}";
+                model.Keluhan = triage.Keluhan;
+                model.Pemeriksaan = triage.BuildPemeriksaanText(_clock.ToLocal(triage.TriageAt));
+                ViewBag.Triage = triage;
+                await LoadMastersAsync();
+                return View(model);
+            }
+
             if (employeeId.HasValue && await _employeeRepository.GetByIdAsync(employeeId.Value) is { } e)
             {
                 model.EmployeeId = e.Id;
@@ -168,6 +197,19 @@ namespace FitToWorkApp.Controllers.Admin
 
             if (!RecommendationTypes.All.Contains(model.Rekomendasi))
                 ModelState.AddModelError(nameof(model.Rekomendasi), "Rekomendasi tidak valid");
+
+            // Memfinalkan pemeriksaan awal: draft harus ada, masih Draft, dan pasiennya sama
+            ClinicTriage? triage = null;
+            if (model.TriageId.HasValue)
+            {
+                triage = await _triageRepo.GetByIdAsync(model.TriageId.Value);
+                if (triage is null)
+                    ModelState.AddModelError(string.Empty, "Pemeriksaan awal tidak ditemukan.");
+                else if (!triage.IsDraft)
+                    ModelState.AddModelError(string.Empty, "Pemeriksaan awal ini sudah difinalkan atau dibatalkan oleh pengguna lain.");
+                else if (model.EmployeeId != triage.EmployeeId)
+                    ModelState.AddModelError(nameof(model.EmployeeId), "Pasien tidak boleh diganti saat melanjutkan pemeriksaan awal");
+            }
 
             int? hariIstirahat = null;
             if (model.Rekomendasi == RecommendationTypes.Istirahat)
@@ -229,9 +271,12 @@ namespace FitToWorkApp.Controllers.Admin
                 try
                 {
                     var id = await _repo.CreateAsync(visit, model.DiseaseIds,
-                        model.Medicines.Select(m => new VisitMedicineInput(m.MedicineId!.Value, m.Qty!.Value, m.AturanPakai)));
+                        model.Medicines.Select(m => new VisitMedicineInput(m.MedicineId!.Value, m.Qty!.Value, m.AturanPakai)),
+                        model.TriageId);
                     await _dashboardNotifier.NotifyClinicChangedAsync();
-                    TempData["Success"] = $"Kunjungan {employee.Nama} berhasil disimpan.";
+                    TempData["Success"] = model.TriageId.HasValue
+                        ? $"Kunjungan {employee.Nama} difinalkan. Pemeriksaan awal perawat ditandai selesai."
+                        : $"Kunjungan {employee.Nama} berhasil disimpan.";
                     return RedirectToAction(nameof(Detail), new { id });
                 }
                 catch (StockException ex)
@@ -239,7 +284,14 @@ namespace FitToWorkApp.Controllers.Admin
                     // Stok tidak cukup: tidak ada data yang tersimpan, form ditampilkan lagi
                     ModelState.AddModelError(nameof(model.Medicines), ex.Message);
                 }
+                catch (TriageStateException ex)
+                {
+                    // Draft sudah difinalkan/dibatalkan pengguna lain tepat sebelum disimpan: tidak ada data yang tersimpan
+                    ModelState.AddModelError(string.Empty, ex.Message);
+                }
             }
+
+            ViewBag.Triage = triage;
 
             if (employee is not null)
                 model.EmployeeLabel = $"{employee.NIP} - {employee.Nama}";
@@ -251,7 +303,9 @@ namespace FitToWorkApp.Controllers.Admin
         public async Task<IActionResult> Detail(int id)
         {
             var v = await _repo.GetByIdAsync(id);
-            return v is null ? NotFound() : View(v);
+            if (v is null) return NotFound();
+            ViewBag.Triage = await _triageRepo.GetByVisitIdAsync(id);   // pemeriksaan awal perawat (kalau kunjungan ini dilanjutkan dari draft)
+            return View(v);
         }
 
         // GET Admin/ClinicVisits/History?employeeId=5  (partial HTML: riwayat pasien untuk form kunjungan)

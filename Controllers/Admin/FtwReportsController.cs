@@ -489,9 +489,11 @@ namespace FitToWorkApp.Controllers.Admin
         {
             var access = await _permissions.GetAsync(User);
             var canClinic = access.Has(Permissions.MedicalVisit);
+            var canTriage = access.Has(Permissions.MedicalTriage) || canClinic;
+            var triageAvailable = await _repo.IsTriageAvailableAsync();
             var rg = Range(from, to, department, _clock.Today.AddDays(-6));
 
-            var rows = await _repo.GetUnfitEventsAsync(rg.Filter, canClinic, FollowUpMax + 1);
+            var rows = await _repo.GetUnfitEventsAsync(rg.Filter, canClinic, FollowUpMax + 1, triageAvailable);
             var truncated = rows.Count > FollowUpMax;
             if (truncated) rows = rows.Take(FollowUpMax).ToList();
 
@@ -502,6 +504,17 @@ namespace FitToWorkApp.Controllers.Admin
                 {
                     r.StatusKode = "klinik";
                     r.Status = "Sudah ditangani klinik";
+                }
+                else if (r.TriageStatus == TriageStatuses.Selesai)
+                {
+                    // Dokter sudah memfinalkan kunjungan dari pemeriksaan awal (detail klinik hanya tampil untuk yang berizin)
+                    r.StatusKode = "klinik";
+                    r.Status = "Sudah ditangani klinik";
+                }
+                else if (r.TriageStatus == TriageStatuses.Draft)
+                {
+                    r.StatusKode = "triage";
+                    r.Status = "Pemeriksaan awal: menunggu dokter";
                 }
                 else if (r.IsiUlangFitUtc is not null)
                 {
@@ -525,19 +538,23 @@ namespace FitToWorkApp.Controllers.Admin
                 Departments = await DepartmentNamesAsync(rg.Filter.Department),
                 GeneratedAt = _clock.LocalNow,
                 CanSeeClinic = canClinic,
+                CanTriage = canTriage,
+                CanDoctor = canClinic,
+                TriageAvailable = triageAvailable,
                 Truncated = truncated,
                 Kejadian = rows.Count,
                 KaryawanUnik = rows.Select(r => r.EmployeeId).Distinct().Count(),
                 Belum = rows.Count(r => r.StatusKode == "belum"),
                 BelumPrioritas = rows.Count(r => r.StatusKode == "belum" && r.Prioritas),
                 Klinik = rows.Count(r => r.StatusKode == "klinik"),
+                MenungguDokter = rows.Count(r => r.StatusKode == "triage"),
                 IsiUlang = rows.Count(r => r.StatusKode == "isiulang")
             };
 
             var filter = (status ?? "all").Trim().ToLowerInvariant();
-            vm.Status = filter is "belum" or "klinik" or "isiulang" ? filter : "all";
+            vm.Status = filter is "belum" or "triage" or "klinik" or "isiulang" ? filter : "all";
 
-            static int Rank(FtwFollowUpRow r) => r.StatusKode == "belum" ? (r.Prioritas ? 0 : 1) : r.StatusKode == "isiulang" ? 2 : 3;
+            static int Rank(FtwFollowUpRow r) => r.StatusKode == "belum" ? (r.Prioritas ? 0 : 1) : r.StatusKode == "triage" ? 2 : r.StatusKode == "isiulang" ? 3 : 4;
             vm.Rows = rows
                 .Where(r => vm.Status == "all" || r.StatusKode == vm.Status)
                 .OrderBy(Rank).ThenByDescending(r => r.WaktuUtc)

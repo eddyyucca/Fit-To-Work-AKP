@@ -23,7 +23,10 @@ namespace FitToWorkApp.Repositories
         Task<List<FtwNameCountRow>> GetUnfitBreakdownAsync(FtwReportFilter f);
         Task<int> GetOperationalDaysAsync(FtwReportFilter f);
 
-        Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max);
+        Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false);
+
+        /// <summary>True kalau tabel pemeriksaan awal (dbo.ClinicTriages, kolom FtwSubmissionId) sudah ada di database.</summary>
+        Task<bool> IsTriageAvailableAsync();
 
         /// <summary>Pengisian tidak fit + jawaban screening + (opsional) hasil pemeriksaan klinik dalam 48 jam berikutnya.</summary>
         Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max);
@@ -215,8 +218,25 @@ namespace FitToWorkApp.Repositories
             return ListAsync<FtwScreeningRow>(sql, new { f.FromUtc, f.ToUtc, Dept = f.Department, Offset = f.OffsetMinutes, Max = max });
         }
 
-        public Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max)
+        public async Task<bool> IsTriageAvailableAsync()
         {
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.ExecuteScalarAsync<int>(
+                "SELECT CASE WHEN OBJECT_ID('dbo.ClinicTriages', 'U') IS NOT NULL AND COL_LENGTH('dbo.ClinicTriages', 'FtwSubmissionId') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+        }
+
+        public Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false)
+        {
+            var triageCols = includeTriage
+                ? "tr.Id AS TriageId, tr.Status AS TriageStatus, tr.VisitId AS TriageVisitId"
+                : "CAST(NULL AS INT) AS TriageId, CAST(NULL AS NVARCHAR(20)) AS TriageStatus, CAST(NULL AS INT) AS TriageVisitId";
+            var triageApply = includeTriage
+                ? @"OUTER APPLY (
+                        SELECT TOP 1 t.Id, t.Status, t.VisitId
+                        FROM dbo.ClinicTriages t
+                        WHERE t.FtwSubmissionId = s.Id AND t.Status IN ('Draft', 'Selesai')
+                        ORDER BY t.Id DESC) tr"
+                : "";
             // Setiap pengisian TIDAK FIT dalam rentang = 1 kejadian (bukan hanya status akhir hari), karena tiap kejadian perlu ditindaklanjuti.
             // Tindak lanjut diturunkan dari data yang sudah ada: kunjungan klinik dalam 48 jam berikutnya (kalau boleh dilihat)
             // dan pengisian ulang berstatus FIT dalam 24 jam berikutnya.
@@ -245,12 +265,14 @@ namespace FitToWorkApp.Repositories
                         FROM dbo.FitToWorkSubmissions s3
                         WHERE s3.EmployeeId = s.EmployeeId AND s3.{NotFit}
                           AND s3.CreatedAt <= s.CreatedAt AND s3.CreatedAt > DATEADD(DAY, -7, s.CreatedAt)) AS TidakFit7Hari,
-                       {clinicCols}
+                       {clinicCols},
+                       {triageCols}
                 FROM dbo.FitToWorkSubmissions s
                 INNER JOIN dbo.Employees e ON e.Id = s.EmployeeId AND e.MitraId IS NULL
                 LEFT JOIN dbo.Departments d ON d.Id = e.DepartmentId
                 LEFT JOIN dbo.Sections sc ON sc.Id = e.SectionId
                 {clinicApply}
+                {triageApply}
                 WHERE s.CreatedAt >= @FromUtc AND s.CreatedAt < @ToUtc
                   AND s.{NotFit}
                   AND (@Dept IS NULL OR d.Name = @Dept)

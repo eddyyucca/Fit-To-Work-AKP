@@ -25,6 +25,7 @@
         return r.StatusKode switch
         {
             "klinik" => new HtmlString("<span class=\"badge bg-success\">Sudah ditangani klinik</span>"),
+            "triage" => new HtmlString("<span class=\"badge bg-primary\">Draft: menunggu dokter</span>"),
             "isiulang" => new HtmlString("<span class=\"badge bg-info text-dark\">Mengisi ulang: FIT</span>"),
             _ => r.Prioritas
                 ? new HtmlString("<span class=\"badge bg-danger\">Belum &middot; prioritas</span>")
@@ -32,7 +33,9 @@
         };
     }
 
-    var statusOptions = new[] { ("all", "Semua status"), ("belum", "Belum ada tindak lanjut"), ("isiulang", "Mengisi ulang: FIT"), ("klinik", "Sudah ditangani klinik") };
+    var statusOptions = new[] { ("all", "Semua status"), ("belum", "Belum ada tindak lanjut"), ("triage", "Draft: menunggu dokter"), ("isiulang", "Mengisi ulang: FIT"), ("klinik", "Sudah ditangani klinik") };
+    var showActions = Model.CanTriage && Model.TriageAvailable;
+    var colCount = 8 + (Model.CanSeeClinic ? 1 : 0) + (showActions ? 1 : 0);
 }
 
 <style>
@@ -106,6 +109,7 @@
         (Nama: "Karyawan", Nilai: Model.KaryawanUnik, Cls: ""),
         (Nama: "Belum ada tindak lanjut", Nilai: Model.Belum, Cls: Model.Belum > 0 ? "text-danger" : ""),
         (Nama: "…prioritas (berulang)", Nilai: Model.BelumPrioritas, Cls: Model.BelumPrioritas > 0 ? "text-danger" : ""),
+        (Nama: "Draft: menunggu dokter", Nilai: Model.MenungguDokter, Cls: Model.MenungguDokter > 0 ? "text-primary" : ""),
         (Nama: "Mengisi ulang: FIT", Nilai: Model.IsiUlang, Cls: "text-info"),
         (Nama: "Ditangani klinik", Nilai: Model.Klinik, Cls: "text-success")
     })
@@ -130,6 +134,7 @@
     {
         <text>(kunjungan klinik tidak ditampilkan karena akun ini tidak punya izin Kunjungan Klinik, jadi kejadian yang sudah ditangani klinik tetap tampil &ldquo;Belum ada tindak lanjut&rdquo;); </text>
     }
+    <strong>Draft: menunggu dokter</strong> = perawat sudah mencatat pemeriksaan awal dari kejadian ini (tombol <em>Pemeriksaan Awal</em>) dan dokter belum memfinalkannya;
     <strong>Mengisi ulang: FIT</strong> = mengisi ulang dan berstatus FIT dalam 24 jam;
     <strong>Prioritas</strong> = belum ada tindak lanjut dan sudah tidak fit 2 hari atau lebih dalam 7 hari terakhir.
     Halaman ini tidak mencatat tindak lanjut baru.
@@ -153,6 +158,7 @@
                         <th>Status</th><th>Waktu</th><th>NIP</th><th>Nama</th><th>Department / Section</th><th>Kontak</th><th>Gejala &amp; kondisi</th>
                         <th class="text-end">7 hari</th>
                         @if (Model.CanSeeClinic) { <th>Klinik</th> }
+                        @if (showActions) { <th class="text-end no-print">Tindak lanjut</th> }
                     </tr>
                 </thead>
                 <tbody>
@@ -192,11 +198,29 @@
                                     else { <span class="text-muted">-</span> }
                                 </td>
                             }
+                            @if (showActions)
+                            {
+                                <td class="text-end text-nowrap no-print">
+                                    @if (r.TriageId.HasValue)
+                                    {
+                                        <a class="btn btn-sm btn-outline-secondary" asp-controller="ClinicTriages" asp-action="Detail" asp-route-id="@r.TriageId">Lihat status</a>
+                                        @if (r.StatusKode == "triage" && Model.CanDoctor)
+                                        {
+                                            <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@r.TriageId">Lanjutkan (Dokter)</a>
+                                        }
+                                    }
+                                    else if (r.StatusKode is "belum" or "isiulang")
+                                    {
+                                        <a class="btn btn-sm btn-outline-primary" asp-controller="ClinicTriages" asp-action="Create" asp-route-ftwId="@r.Id" title="Catat pemeriksaan awal (perawat) untuk kejadian ini">Pemeriksaan Awal</a>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                            }
                         </tr>
                     }
                     @if (Model.Rows.Count == 0)
                     {
-                        <tr><td colspan="@(Model.CanSeeClinic ? 9 : 8)" class="text-center text-muted py-4">Tidak ada kejadian tidak fit pada periode ini.</td></tr>
+                        <tr><td colspan="@colCount" class="text-center text-muted py-4">Tidak ada kejadian tidak fit pada periode ini.</td></tr>
                     }
                 </tbody>
             </table>

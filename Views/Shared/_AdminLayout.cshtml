@@ -6,7 +6,7 @@
     // Menu hanya tampil kalau role user punya hak aksesnya (dicek juga di controller)
     var access = await PermissionService.GetAsync(User);
     var canDashboard = access.Has(Permissions.FtwDashboard) || access.Has(Permissions.GymHistory) || access.Has(Permissions.MedicalVisit);
-    var anyMedical = access.Has(Permissions.MedicalCheckup) || access.Has(Permissions.MedicalVisit) || access.Has(Permissions.MedicalDrugTest);
+    var anyMedical = access.Has(Permissions.MedicalCheckup) || access.Has(Permissions.MedicalVisit) || access.Has(Permissions.MedicalDrugTest) || access.Has(Permissions.MedicalTriage);
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
     string Active(params string[] controllers) => controllers.Contains(currentController) ? "active" : "";
@@ -171,12 +171,20 @@
                         }
                         @if (anyMedical || access.Has(Permissions.MedicalMaster))
                         {
-                            <li class="nav-item @Open("ClinicVisits", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
-                                <a href="#" class="nav-link @Active("ClinicVisits", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                            <li class="nav-item @Open("ClinicVisits", "ClinicTriages", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                                <a href="#" class="nav-link @Active("ClinicVisits", "ClinicTriages", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
                                     <i class="nav-icon bi bi-hospital"></i>
                                     <p>Klinik &amp; Kesehatan<i class="nav-arrow bi bi-chevron-right"></i></p>
                                 </a>
                                 <ul class="nav nav-treeview">
+                                    @if (access.Has(Permissions.MedicalTriage) || access.Has(Permissions.MedicalVisit))
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("ClinicTriages")" asp-area="" asp-controller="ClinicTriages" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Pemeriksaan Awal (Perawat)</p>
+                                            </a>
+                                        </li>
+                                    }
                                     @if (access.Has(Permissions.MedicalVisit))
                                     {
                                         <li class="nav-item">

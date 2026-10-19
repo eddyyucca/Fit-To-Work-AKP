@@ -17,6 +17,9 @@
     <div class="d-flex flex-wrap align-items-center gap-2">
         <div class="small text-muted me-2" id="summary">&nbsp;</div>
         <button type="button" class="btn btn-success btn-sm" id="btnExportExcel">📥 Download Excel</button>
+        <a class="btn btn-outline-warning btn-sm text-dark" asp-controller="ClinicTriages" asp-action="Index" title="Pemeriksaan awal perawat yang menunggu dokter">
+            Antrian dokter @if ((int)(ViewBag.DraftTriages ?? 0) > 0) { <span class="badge bg-warning text-dark">@ViewBag.DraftTriages</span> }
+        </a>
         <a class="btn btn-primary btn-sm" asp-controller="ClinicVisits" asp-action="Create">+ Catat Kunjungan</a>
     </div>
 </div>

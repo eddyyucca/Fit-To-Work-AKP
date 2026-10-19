@@ -1,0 +1,100 @@
+@model List<ClinicTriage>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Pemeriksaan Awal";
+    Layout = "_AdminLayout";
+    var status = (string)ViewBag.Status;
+    var from = (DateTime)ViewBag.From;
+    var to = (DateTime)ViewBag.To;
+    var canDoctor = (bool)ViewBag.CanDoctor;
+    var rangeIgnored = (bool)ViewBag.RangeIgnored;
+    var draftCount = (int)ViewBag.DraftCount;
+    string F(DateTime d) => d.ToString("yyyy-MM-dd");
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Pemeriksaan Awal (Perawat)</h4>
+        <div class="text-muted small">Perawat mencatat keluhan dan tanda vital sebagai draft; dokter melanjutkan pemeriksaan detail dan memfinalkannya menjadi Kunjungan Klinik.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <span class="btn btn-outline-warning btn-sm disabled opacity-100 text-dark">Menunggu dokter: <strong>@draftCount</strong></span>
+        <a asp-action="Create" class="btn btn-primary btn-sm">+ Pemeriksaan Awal</a>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end" autocomplete="off">
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="status">Status</label>
+                <select id="status" name="status" class="form-select form-select-sm">
+                    <option value="draft" selected="@(status == "draft")">Draft - menunggu dokter</option>
+                    <option value="selesai" selected="@(status == "selesai")">Selesai (sudah difinalkan)</option>
+                    <option value="batal" selected="@(status == "batal")">Dibatalkan</option>
+                    <option value="semua" selected="@(status == "semua")">Semua status</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="from">Dari tanggal</label>
+                <input type="date" id="from" name="from" class="form-control form-control-sm" value="@F(from)" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="to">Sampai tanggal</label>
+                <input type="date" id="to" name="to" class="form-control form-control-sm" value="@F(to)" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-1" for="search">Cari</label>
+                <input type="search" id="search" name="search" class="form-control form-control-sm" value="@ViewBag.Search" placeholder="Nama / NIP / keluhan" />
+            </div>
+            <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary btn-sm">Tampilkan</button></div>
+        </form>
+        @if (rangeIgnored)
+        {
+            <div class="small text-muted mt-2">Draft ditampilkan untuk semua tanggal supaya tidak ada yang terlewat; rentang tanggal berlaku untuk status lain.</div>
+        }
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Waktu</th><th>Pasien</th><th>Keluhan</th><th>Tanda vital</th><th>Perawat</th><th>Status</th><th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model)
+                {
+                    <tr>
+                        <td class="text-nowrap">@Clock.ToLocal(t.TriageAt).ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            <div class="fw-semibold">@t.NamaSnapshot</div>
+                            <div class="small text-muted">@t.NIP · @t.DepartmentSnapshot</div>
+                        </td>
+                        <td style="min-width: 220px">@t.Keluhan</td>
+                        <td class="small" style="min-width: 200px">@(string.IsNullOrEmpty(t.VitalSummary()) ? "-" : t.VitalSummary())</td>
+                        <td class="small">@t.NurseName</td>
+                        <td><span class="badge @TriageStatuses.BadgeClass(t.Status)">@(t.Status == TriageStatuses.Draft ? "Draft" : t.Status)</span></td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Detail" asp-route-id="@t.Id">Lihat</a>
+                            @if (t.IsDraft)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@t.Id">Ubah</a>
+                                @if (canDoctor)
+                                {
+                                    <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@t.Id">Lanjutkan (Dokter)</a>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">@(status == "draft" ? "Tidak ada pemeriksaan awal yang menunggu dokter." : "Tidak ada data.")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

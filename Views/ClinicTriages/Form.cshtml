@@ -1,0 +1,129 @@
+@model FitToWorkApp.Controllers.Admin.TriageFormViewModel
+@{
+    var isEdit = Model.Id > 0;
+    ViewData["Title"] = isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal (Perawat)";
+    Layout = "_AdminLayout";
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="small text-decoration-none">‹ Kembali ke Pemeriksaan Awal</a>
+    <h4 class="mb-0 mt-1">@(isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal (Perawat)")</h4>
+    <div class="text-muted small">Catat keluhan dan tanda vital. Disimpan sebagai <strong>draft</strong>, lalu dilanjutkan dokter untuk pemeriksaan detail, diagnosa, obat, dan finalisasi.</div>
+</div>
+
+<form asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@(isEdit ? Model.Id : null)" method="post" id="triageForm" autocomplete="off">
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+    @if (Model.FtwSubmissionId.HasValue)
+    {
+        <input type="hidden" name="FtwSubmissionId" value="@Model.FtwSubmissionId" />
+        <div class="alert alert-info py-2 small">Pemeriksaan awal ini berasal dari hasil <strong>Fit To Work yang tidak fit</strong>. Keluhan sudah diisi dari jawaban screening dan bisa Anda ubah. Statusnya akan terlihat di Laporan Fit To Work &rsaquo; Tindak Lanjut.</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Karyawan / Pasien</label>
+                            @if (isEdit)
+                            {
+                                <input type="hidden" name="EmployeeId" value="@Model.EmployeeId" />
+                                <input class="form-control" value="@Model.EmployeeLabel" readonly />
+                                <div class="form-text">Pasien tidak bisa diganti. Salah pasien? Batalkan draft ini lalu buat yang baru.</div>
+                            }
+                            else
+                            {
+                                ViewData["PickerIncludeMitra"] = true;
+                                ViewData["PickerController"] = "ClinicTriages";
+                                <partial name="_EmployeePicker" model="(Model.EmployeeId, Model.EmployeeLabel)" />
+                            }
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="TriageAt">Waktu Pemeriksaan</label>
+                            <input asp-for="TriageAt" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Keluhan</div>
+                <div class="card-body">
+                    <label class="form-label" asp-for="Keluhan">Keluhan utama</label>
+                    <textarea asp-for="Keluhan" class="form-control" rows="3" maxlength="1000" placeholder="mis. Demam 2 hari, batuk, pusing"></textarea>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Tanda Vital <span class="text-muted fw-normal small">(isi yang diperiksa)</span></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Sistolik">Sistolik</label>
+                            <div class="input-group input-group-sm"><input asp-for="Sistolik" type="number" min="50" max="300" class="form-control" /><span class="input-group-text">mmHg</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Diastolik">Diastolik</label>
+                            <div class="input-group input-group-sm"><input asp-for="Diastolik" type="number" min="30" max="200" class="form-control" /><span class="input-group-text">mmHg</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Nadi">Nadi</label>
+                            <div class="input-group input-group-sm"><input asp-for="Nadi" type="number" min="20" max="250" class="form-control" /><span class="input-group-text">x/mnt</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Suhu">Suhu</label>
+                            <div class="input-group input-group-sm"><input asp-for="Suhu" type="number" step="0.1" min="30" max="45" class="form-control" /><span class="input-group-text">°C</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Napas">Frekuensi napas</label>
+                            <div class="input-group input-group-sm"><input asp-for="Napas" type="number" min="5" max="80" class="form-control" /><span class="input-group-text">x/mnt</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="Spo2">SpO2</label>
+                            <div class="input-group input-group-sm"><input asp-for="Spo2" type="number" min="50" max="100" class="form-control" /><span class="input-group-text">%</span></div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1" asp-for="BeratBadan">Berat badan</label>
+                            <div class="input-group input-group-sm"><input asp-for="BeratBadan" type="number" step="0.1" min="1" max="400" class="form-control" /><span class="input-group-text">kg</span></div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label small mb-1" asp-for="CatatanPerawat">Catatan perawat <span class="text-muted">(opsional)</span></label>
+                        <textarea asp-for="CatatanPerawat" class="form-control" rows="2" maxlength="1000" placeholder="mis. riwayat alergi, obat yang sudah diminum, hal yang perlu diperhatikan dokter"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-3 border-warning-subtle">
+                <div class="card-body small">
+                    <div class="fw-semibold mb-1">Alur pemeriksaan</div>
+                    <ol class="ps-3 mb-0">
+                        <li><strong>Perawat</strong> mencatat pemeriksaan awal di sini (draft).</li>
+                        <li><strong>Dokter</strong> membuka draft, melanjutkan pemeriksaan detail, memilih diagnosa ICD-10, obat, dan rekomendasi.</li>
+                        <li>Setelah <strong>difinalkan</strong> dokter, kunjungan klinik tercatat dan draft ini selesai.</li>
+                    </ol>
+                    <div class="text-muted mt-2">Draft belum dihitung sebagai kunjungan klinik dan belum mengurangi stok obat.</div>
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg">Simpan Draft</button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    @if (!isEdit)
+    {
+        <script src="~/js/employee-picker.js" asp-append-version="true"></script>
+    }
+    <script>
+        document.getElementById('triageForm').addEventListener('submit', function (e) {
+            if (!this.elements['EmployeeId'].value) { e.preventDefault(); toastr.warning('Pilih karyawan terlebih dahulu.'); }
+        });
+    </script>
+}

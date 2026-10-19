@@ -1,5 +1,7 @@
 @model ClinicVisit
+@inject FitToWorkApp.Services.IAppClock Clock
 @{
+    var triage = ViewBag.Triage as ClinicTriage;
     ViewData["Title"] = "Detail Kunjungan Klinik";
     Layout = "_AdminLayout";
 }
@@ -12,6 +14,24 @@
 
 <div class="row g-3">
     <div class="col-lg-7">
+        @if (triage is not null)
+        {
+            <div class="card shadow-sm mb-3 border-warning-subtle">
+                <div class="card-header bg-warning-subtle fw-semibold d-flex justify-content-between flex-wrap gap-1">
+                    <span>Pemeriksaan awal oleh perawat</span>
+                    <span class="small fw-normal">@triage.NurseName &middot; @Clock.ToLocal(triage.TriageAt).ToString("dd/MM/yyyy HH:mm")</span>
+                </div>
+                <div class="card-body py-2 small">
+                    <div><strong>Keluhan:</strong> @triage.Keluhan</div>
+                    <div><strong>Tanda vital:</strong> @(string.IsNullOrEmpty(triage.VitalSummary()) ? "tidak dicatat" : triage.VitalSummary())</div>
+                    @if (!string.IsNullOrWhiteSpace(triage.CatatanPerawat))
+                    {
+                        <div><strong>Catatan perawat:</strong> @triage.CatatanPerawat</div>
+                    }
+                    <a class="small" asp-controller="ClinicTriages" asp-action="Detail" asp-route-id="@triage.Id">Lihat pemeriksaan awal</a>
+                </div>
+            </div>
+        }
         <partial name="_VisitCard" model="Model" />
     </div>
     <div class="col-lg-5">
