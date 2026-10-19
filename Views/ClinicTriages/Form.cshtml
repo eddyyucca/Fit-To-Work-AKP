@@ -1,14 +1,14 @@
 @model FitToWorkApp.Controllers.Admin.TriageFormViewModel
 @{
     var isEdit = Model.Id > 0;
-    ViewData["Title"] = isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal (Perawat)";
+    ViewData["Title"] = isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal";
     Layout = "_AdminLayout";
 }
 
 <div class="mb-4">
     <a asp-action="Index" class="small text-decoration-none">‹ Kembali ke Pemeriksaan Awal</a>
-    <h4 class="mb-0 mt-1">@(isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal (Perawat)")</h4>
-    <div class="text-muted small">Catat keluhan dan tanda vital. Disimpan sebagai <strong>draft</strong>, lalu dilanjutkan dokter untuk pemeriksaan detail, diagnosa, obat, dan finalisasi.</div>
+    <h4 class="mb-0 mt-1">@(isEdit ? "Ubah Draft Pemeriksaan Awal" : "Pemeriksaan Awal")</h4>
+    <div class="text-muted small">Catat keluhan dan tanda vital, lalu simpan sebagai <strong>draft</strong>. Dokter melanjutkannya di komputer lain lewat menu <strong>Pemeriksaan Dokter</strong>.</div>
 </div>
 
 <form asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@(isEdit ? Model.Id : null)" method="post" id="triageForm" autocomplete="off">
@@ -101,8 +101,8 @@
                 <div class="card-body small">
                     <div class="fw-semibold mb-1">Alur pemeriksaan</div>
                     <ol class="ps-3 mb-0">
-                        <li><strong>Perawat</strong> mencatat pemeriksaan awal di sini (draft).</li>
-                        <li><strong>Dokter</strong> membuka draft, melanjutkan pemeriksaan detail, memilih diagnosa ICD-10, obat, dan rekomendasi.</li>
+                        <li><strong>Perawat</strong> mencatat pemeriksaan di menu ini dan menyimpannya sebagai draft.</li>
+                        <li><strong>Dokter</strong> membuka draft di menu <strong>Pemeriksaan Dokter</strong> (komputer lain), melanjutkan pemeriksaan detail, memilih diagnosa ICD-10, obat, dan rekomendasi.</li>
                         <li>Setelah <strong>difinalkan</strong> dokter, kunjungan klinik tercatat dan draft ini selesai.</li>
                     </ol>
                     <div class="text-muted mt-2">Draft belum dihitung sebagai kunjungan klinik dan belum mengurangi stok obat.</div>

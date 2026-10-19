@@ -1,0 +1,57 @@
+@* Antrian dokter: draft Pemeriksaan Awal dari perawat yang menunggu. Model: List<ClinicTriage> (terlama dulu).
+   Dibungkus #queueBox supaya bisa dimuat ulang otomatis (perawat dan dokter memakai komputer berbeda). *@
+@model List<ClinicTriage>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    var nowUtc = DateTime.UtcNow;
+    string Wait(DateTime triageUtc)
+    {
+        var m = (int)Math.Max(0, (nowUtc - DateTime.SpecifyKind(triageUtc, DateTimeKind.Utc)).TotalMinutes);
+        return m < 60 ? $"{m} menit" : m < 1440 ? $"{m / 60} jam {m % 60} menit" : $"{m / 1440} hari";
+    }
+}
+<div id="queueBox" data-count="@Model.Count" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h5 class="mb-0">Antrian dokter
+            <span class="badge @(Model.Count > 0 ? "bg-warning text-dark" : "bg-secondary") align-middle">@Model.Count menunggu</span>
+        </h5>
+        <span class="small text-muted" id="queueStamp">Diperbarui @Clock.LocalNow.ToString("HH:mm:ss")</span>
+    </div>
+    <div class="card shadow-sm @(Model.Count > 0 ? "border-warning" : "")">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Menunggu</th><th>Pasien</th><th>Keluhan</th><th>Tanda vital</th><th>Perawat</th><th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Model)
+                    {
+                        <tr>
+                            <td class="text-nowrap">
+                                <div class="fw-semibold">@Wait(t.TriageAt)</div>
+                                <div class="small text-muted">sejak @Clock.ToLocal(t.TriageAt).ToString("dd/MM HH:mm")</div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@t.NamaSnapshot</div>
+                                <div class="small text-muted">@t.NIP · @t.DepartmentSnapshot</div>
+                            </td>
+                            <td style="min-width: 220px">@t.Keluhan</td>
+                            <td class="small" style="min-width: 200px">@(string.IsNullOrEmpty(t.VitalSummary()) ? "-" : t.VitalSummary())</td>
+                            <td class="small">@t.NurseName</td>
+                            <td class="text-end text-nowrap">
+                                <a class="btn btn-sm btn-outline-secondary" asp-controller="ClinicTriages" asp-action="Detail" asp-route-id="@t.Id">Lihat</a>
+                                <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@t.Id">Lanjutkan Pemeriksaan</a>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-3">Tidak ada pemeriksaan awal yang menunggu dokter. Daftar ini diperbarui otomatis tiap 30 detik.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

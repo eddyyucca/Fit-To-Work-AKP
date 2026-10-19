@@ -116,7 +116,9 @@ namespace FitToWorkApp.Controllers.Admin
             ViewBag.Departments = (await _orgRepository.GetDepartmentsAsync()).Select(d => d.Name)
                 .Concat((await _mitraRepository.GetAllAsync()).Select(m => m.Nama))
                 .Distinct().OrderBy(n => n).ToList();
-            ViewBag.DraftTriages = await _triageRepo.CountDraftAsync();
+            // Antrian dokter: draft Pemeriksaan Awal dari perawat yang menunggu (terlama dulu). Kosong kalau tabelnya belum ada.
+            ViewBag.Queue = (await _triageRepo.GetListAsync(new ClinicTriageQuery { Status = TriageStatuses.Draft }))
+                .OrderBy(t => t.TriageAt).ToList();
             return View();
         }
 
@@ -166,7 +168,7 @@ namespace FitToWorkApp.Controllers.Admin
                     TempData["Error"] = triage is null
                         ? "Pemeriksaan awal tidak ditemukan."
                         : "Pemeriksaan awal ini sudah difinalkan atau dibatalkan.";
-                    return RedirectToAction("Index", "ClinicTriages");
+                    return RedirectToAction(nameof(Index));
                 }
                 model.TriageId = triage.Id;
                 model.EmployeeId = triage.EmployeeId;

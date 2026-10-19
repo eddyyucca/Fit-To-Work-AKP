@@ -14,11 +14,12 @@
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
-        <h4 class="mb-0">Pemeriksaan Awal (Perawat)</h4>
-        <div class="text-muted small">Perawat mencatat keluhan dan tanda vital sebagai draft; dokter melanjutkan pemeriksaan detail dan memfinalkannya menjadi Kunjungan Klinik.</div>
+        <h4 class="mb-0">Pemeriksaan Awal</h4>
+        <div class="text-muted small">Perawat mencatat keluhan dan tanda vital, lalu menyimpannya sebagai draft. Dokter melanjutkannya di komputer lain lewat menu <strong>Pemeriksaan Dokter</strong>.</div>
     </div>
     <div class="d-flex flex-wrap gap-2">
         <span class="btn btn-outline-warning btn-sm disabled opacity-100 text-dark">Menunggu dokter: <strong>@draftCount</strong></span>
+        @if (canDoctor) { <a asp-controller="ClinicVisits" asp-action="Index" class="btn btn-outline-primary btn-sm">Buka Pemeriksaan Dokter &rarr;</a> }
         <a asp-action="Create" class="btn btn-primary btn-sm">+ Pemeriksaan Awal</a>
     </div>
 </div>
@@ -82,17 +83,13 @@
                             @if (t.IsDraft)
                             {
                                 <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@t.Id">Ubah</a>
-                                @if (canDoctor)
-                                {
-                                    <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@t.Id">Lanjutkan (Dokter)</a>
-                                }
                             }
                         </td>
                     </tr>
                 }
                 @if (Model.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-center text-muted py-4">@(status == "draft" ? "Tidak ada pemeriksaan awal yang menunggu dokter." : "Tidak ada data.")</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4">@(status == "draft" ? "Tidak ada draft yang menunggu dokter." : "Tidak ada data.")</td></tr>
                 }
             </tbody>
         </table>

@@ -7,6 +7,8 @@
     var access = await PermissionService.GetAsync(User);
     var canDashboard = access.Has(Permissions.FtwDashboard) || access.Has(Permissions.GymHistory) || access.Has(Permissions.MedicalVisit);
     var anyMedical = access.Has(Permissions.MedicalCheckup) || access.Has(Permissions.MedicalVisit) || access.Has(Permissions.MedicalDrugTest) || access.Has(Permissions.MedicalTriage);
+    // Rekam Medis hanya untuk izin pemeriksaan kesehatan / kunjungan / tes (perawat Pemeriksaan Awal tidak termasuk)
+    var anyMedicalRecord = access.Has(Permissions.MedicalCheckup) || access.Has(Permissions.MedicalVisit) || access.Has(Permissions.MedicalDrugTest);
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
     string Active(params string[] controllers) => controllers.Contains(currentController) ? "active" : "";
@@ -181,7 +183,7 @@
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link @Active("ClinicTriages")" asp-area="" asp-controller="ClinicTriages" asp-action="Index">
-                                                <i class="nav-icon bi bi-circle"></i><p>Pemeriksaan Awal (Perawat)</p>
+                                                <i class="nav-icon bi bi-circle"></i><p>Pemeriksaan Awal</p>
                                             </a>
                                         </li>
                                     }
@@ -189,7 +191,7 @@
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link @Active("ClinicVisits")" asp-area="" asp-controller="ClinicVisits" asp-action="Index">
-                                                <i class="nav-icon bi bi-circle"></i><p>Kunjungan Klinik</p>
+                                                <i class="nav-icon bi bi-circle"></i><p>Pemeriksaan Dokter</p>
                                             </a>
                                         </li>
                                     }
@@ -214,7 +216,7 @@
                                             </a>
                                         </li>
                                     }
-                                    @if (anyMedical)
+                                    @if (anyMedicalRecord)
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link @Active("MedicalRecord")" asp-area="" asp-controller="MedicalRecord" asp-action="Index">

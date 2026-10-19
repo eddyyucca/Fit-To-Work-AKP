@@ -3,7 +3,7 @@
 @{
     var triage = ViewBag.Triage as ClinicTriage;
     var triageMode = Model.TriageId.HasValue;
-    ViewData["Title"] = triageMode ? "Lanjutkan Pemeriksaan (Dokter)" : "Catat Kunjungan Klinik";
+    ViewData["Title"] = triageMode ? "Pemeriksaan Dokter" : "Catat Kunjungan Klinik";
     Layout = "_AdminLayout";
     var diseases = (List<Disease>)ViewBag.Diseases;
     var medicines = (List<Medicine>)ViewBag.MedicineList;
@@ -20,7 +20,7 @@
 
 <div class="mb-4">
     <a asp-controller="ClinicVisits" asp-action="Index" class="small text-decoration-none">‹ Kembali ke Kunjungan Klinik</a>
-    <h4 class="mb-0 mt-1">@(triageMode ? "Lanjutkan Pemeriksaan (Dokter)" : "Catat Kunjungan Klinik")</h4>
+    <h4 class="mb-0 mt-1">@(triageMode ? "Pemeriksaan Dokter" : "Catat Kunjungan Klinik")</h4>
     @if (triageMode)
     {
         <div class="text-muted small">Lengkapi pemeriksaan detail, pilih diagnosa ICD-10, obat, dan rekomendasi, lalu <strong>finalkan</strong>.</div>
@@ -37,7 +37,7 @@
     {
         <div class="card shadow-sm mb-3 border-warning">
             <div class="card-header bg-warning-subtle fw-semibold d-flex justify-content-between flex-wrap gap-1">
-                <span>Pemeriksaan awal perawat (draft)</span>
+                <span>Pemeriksaan perawat (draft)</span>
                 <span class="small fw-normal">@triage.NurseName &middot; @Clock.ToLocal(triage.TriageAt).ToString("dd/MM/yyyy HH:mm") &middot; <a asp-controller="ClinicTriages" asp-action="Detail" asp-route-id="@triage.Id" target="_blank" rel="noopener">buka</a></span>
             </div>
             <div class="card-body py-2 small">
@@ -202,7 +202,7 @@
                 <button type="submit" class="btn btn-primary btn-lg">@(triageMode ? "Finalkan Kunjungan" : "Simpan Kunjungan")</button>
                 @if (triageMode)
                 {
-                    <a asp-controller="ClinicTriages" asp-action="Index" class="btn btn-outline-secondary">Kembali ke antrian</a>
+                    <a asp-controller="ClinicVisits" asp-action="Index" class="btn btn-outline-secondary">Kembali ke antrian dokter</a>
                 }
                 else
                 {

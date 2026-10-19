@@ -211,7 +211,7 @@
                                     }
                                     else if (r.StatusKode is "belum" or "isiulang")
                                     {
-                                        <a class="btn btn-sm btn-outline-primary" asp-controller="ClinicTriages" asp-action="Create" asp-route-ftwId="@r.Id" title="Catat pemeriksaan awal (perawat) untuk kejadian ini">Pemeriksaan Awal</a>
+                                        <a class="btn btn-sm btn-outline-primary" asp-controller="ClinicTriages" asp-action="Create" asp-route-ftwId="@r.Id" title="Catat pemeriksaan awal untuk kejadian ini (dilanjutkan dokter di menu Pemeriksaan Dokter)">Pemeriksaan Awal</a>
                                     }
                                     else { <span class="text-muted">-</span> }
                                 </td>

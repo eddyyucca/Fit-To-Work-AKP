@@ -37,7 +37,7 @@ namespace FitToWorkApp.Security
             new PermissionInfo(FitnessTypes, "Aktivitas Kebugaran", "Jenis Aktivitas", "Tambah/ubah jenis aktivitas: GPS, wajib berat badan, batas jam, kunci lokasi"),
             new PermissionInfo(MedicalCheckup, "Klinik & Kesehatan", "Pemeriksaan Kesehatan", "Input & lihat hasil pemkes, skor risiko, upload hasil & Follow Up Pemkes - data medis"),
             new PermissionInfo(MedicalVisit, "Klinik & Kesehatan", "Kunjungan Klinik", "Catat kunjungan, diagnosa, obat & rekomendasi, serta kelola Karyawan Mitra - data medis"),
-            new PermissionInfo(MedicalTriage, "Klinik & Kesehatan", "Pemeriksaan Awal (Perawat)", "Catat pemeriksaan awal (keluhan & tanda vital) sebagai draft untuk dilanjutkan dokter. Tidak bisa melihat diagnosa, obat, atau memfinalkan kunjungan (itu hak Kunjungan Klinik) - data medis"),
+            new PermissionInfo(MedicalTriage, "Klinik & Kesehatan", "Pemeriksaan Awal", "Catat pemeriksaan awal (keluhan & tanda vital) sebagai draft untuk dilanjutkan dokter di menu Pemeriksaan Dokter. Tidak bisa melihat diagnosa, obat, atau memfinalkan kunjungan (itu hak Kunjungan Klinik) - data medis"),
             new PermissionInfo(MedicalDrugTest, "Klinik & Kesehatan", "Tes Urin & Alkohol", "Input & lihat hasil tes urin (narkoba) & tes alkohol karyawan AKP & mitra beserta lampirannya - data medis"),
             new PermissionInfo(MedicalMaster, "Klinik & Kesehatan", "Obat, Stok & Master Klinik", "Obat & stok (termasuk import Excel), jenis & kategori penyakit, satuan obat, parameter tes urin, parameter & skor pemkes, batas alkohol & follow up, Data Mitra"),
             new PermissionInfo(MasterEmployees, "Master Data", "Data Karyawan", "Tambah/ubah/nonaktifkan & import karyawan"),

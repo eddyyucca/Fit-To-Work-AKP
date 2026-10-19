@@ -1,7 +1,8 @@
 @{
-    ViewData["Title"] = "Kunjungan Klinik";
+    ViewData["Title"] = "Pemeriksaan Dokter";
     Layout = "_AdminLayout";
     var departments = (List<string>)ViewBag.Departments;
+    var queue = (List<ClinicTriage>)ViewBag.Queue;
 }
 
 <style>
@@ -11,19 +12,19 @@
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
     <div>
-        <h4 class="mb-0">Kunjungan Klinik</h4>
-        <div class="text-muted small">Keluhan, diagnosa, obat &amp; rekomendasi per kunjungan.</div>
+        <h4 class="mb-0">Pemeriksaan Dokter</h4>
+        <div class="text-muted small">Antrian pemeriksaan awal dari perawat di atas; riwayat kunjungan yang sudah difinalkan (keluhan, diagnosa, obat &amp; rekomendasi) di bawah.</div>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2">
         <div class="small text-muted me-2" id="summary">&nbsp;</div>
         <button type="button" class="btn btn-success btn-sm" id="btnExportExcel">📥 Download Excel</button>
-        <a class="btn btn-outline-warning btn-sm text-dark" asp-controller="ClinicTriages" asp-action="Index" title="Pemeriksaan awal perawat yang menunggu dokter">
-            Antrian dokter @if ((int)(ViewBag.DraftTriages ?? 0) > 0) { <span class="badge bg-warning text-dark">@ViewBag.DraftTriages</span> }
-        </a>
-        <a class="btn btn-primary btn-sm" asp-controller="ClinicVisits" asp-action="Create">+ Catat Kunjungan</a>
+        <a class="btn btn-primary btn-sm" asp-controller="ClinicVisits" asp-action="Create" title="Pasien yang datang langsung ke dokter, tanpa pemeriksaan awal perawat">+ Kunjungan langsung</a>
     </div>
 </div>
 
+<partial name="_DoctorQueue" model="queue" />
+
+<h5 class="mb-2">Riwayat kunjungan <span class="text-muted fw-normal small">(sudah difinalkan)</span></h5>
 <div class="card shadow-sm">
     <div class="card-body pb-0">
         <form id="filter" class="row g-2 align-items-end" autocomplete="off">
@@ -88,4 +89,31 @@
         };
     </script>
     <script src="~/js/clinic-visits.js" asp-append-version="true"></script>
+    <script>
+        // Perawat menyimpan draft dari komputer lain: antrian dokter dimuat ulang otomatis tiap 30 detik
+        (function () {
+            let busy = false;
+            async function refresh() {
+                if (busy || document.hidden) return;
+                const box = document.getElementById('queueBox');
+                if (!box) return;
+                busy = true;
+                try {
+                    const res = await fetch(window.location.pathname, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+                    if (!res.ok) return;
+                    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                    const fresh = doc.getElementById('queueBox');
+                    if (!fresh) return;
+                    const before = Number(box.dataset.count), after = Number(fresh.dataset.count);
+                    box.innerHTML = fresh.innerHTML;
+                    box.dataset.count = after;
+                    const stamp = document.getElementById('queueStamp');
+                    if (stamp) stamp.textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID');
+                    if (after > before && window.toastr) toastr.info('Ada ' + (after - before) + ' pemeriksaan awal baru dari perawat.');
+                } catch (e) { /* koneksi terputus: coba lagi pada putaran berikutnya */ }
+                finally { busy = false; }
+            }
+            setInterval(refresh, 30000);
+        })();
+    </script>
 }

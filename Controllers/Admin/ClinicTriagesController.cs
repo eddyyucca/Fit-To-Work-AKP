@@ -127,6 +127,13 @@ namespace FitToWorkApp.Controllers.Admin
             return View(rows);
         }
 
+        // ============================ Antrian dokter ============================
+
+        // Alamat lama: antrian dokter sekarang menyatu di menu Pemeriksaan Dokter (ClinicVisits/Index)
+        [HttpGet("Doctor")]
+        [HasPermission(Permissions.MedicalVisit)]
+        public IActionResult Doctor() => RedirectToAction("Index", "ClinicVisits");
+
         // ============================ Buat / ubah draft ============================
 
         [HttpGet("Create")]
