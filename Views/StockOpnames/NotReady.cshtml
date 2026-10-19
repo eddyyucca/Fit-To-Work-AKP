@@ -1,0 +1,11 @@
+@{
+    ViewData["Title"] = "Stok Opname belum aktif";
+    Layout = "_AdminLayout";
+}
+
+<div class="alert alert-warning">
+    <h5 class="alert-heading">Fitur Stok Opname belum aktif di database</h5>
+    <p class="mb-2">Tabel <code>dbo.StockOpnames</code> belum dibuat. Minta admin database menjalankan file
+        <code>Database/migration_stock_opname.sql</code> pada database aplikasi ini (aman diulang, hanya menambah tabel baru), lalu muat ulang halaman ini.</p>
+    <p class="mb-0 small text-muted">Halaman Obat &amp; Stok dan fitur lain tetap berfungsi normal.</p>
+</div>

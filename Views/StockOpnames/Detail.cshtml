@@ -1,0 +1,229 @@
+@model StockOpname
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Stok Opname " + Model.PeriodeLabel;
+    Layout = "_AdminLayout";
+    var show = (string)ViewBag.Show;
+    var items = (List<StockOpnameItem>)ViewBag.Items;
+    var all = (List<StockOpnameItem>)ViewBag.AllItems;
+    var notIncluded = (List<Medicine>)ViewBag.NotIncluded;
+    var open = Model.IsOpen;
+    string Local(DateTime? utc) => utc is null ? "-" : Clock.ToLocal(DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc)).ToString("dd/MM/yyyy HH:mm");
+    string Day(DateTime? utc) => utc is null ? "-" : Clock.ToLocal(DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc)).ToString("dd/MM/yyyy");
+    var cntAll = all.Count;
+    var cntBelum = all.Count(i => !i.IsCounted);
+    var cntHitung = all.Count(i => i.IsCounted && !i.IsApplied);
+    var cntApplied = all.Count(i => i.IsApplied);
+}
+
+<style>
+    .op-input { width: 7.5rem; }
+    .op-diff-plus { color: #198754; font-weight: 600; }
+    .op-diff-minus { color: #dc3545; font-weight: 600; }
+    .op-row-applied { background: rgba(25,135,84,.06); }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <a asp-action="Index" class="small text-decoration-none">‹ Kembali ke Stok Opname</a>
+        <h4 class="mb-0 mt-1">Stok Opname @Model.PeriodeLabel <span class="badge @OpnameStatuses.BadgeClass(Model.Status) fs-6 align-middle">@Model.Status</span></h4>
+        <div class="text-muted small">
+            Periode @Model.PeriodeMulai.ToString("dd/MM/yyyy") &ndash; @Model.PeriodeSelesai.ToString("dd/MM/yyyy")
+            &middot; dibuat @Local(Model.CreatedAt) oleh @Model.CreatedBy
+            &middot; <strong>terakhir diisi: @Local(Model.LastFilledAt)</strong>
+            @if (!string.IsNullOrWhiteSpace(Model.Catatan)) { <text> &middot; @Model.Catatan</text> }
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-success btn-sm" asp-action="Export" asp-route-id="@Model.Id">&#128229; Excel</a>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    @foreach (var k in new[]
+    {
+        (Nama: "Obat di opname ini", Nilai: cntAll, Cls: "", Filter: "semua"),
+        (Nama: "Belum dihitung", Nilai: cntBelum, Cls: cntBelum > 0 ? "text-secondary" : "", Filter: "belum"),
+        (Nama: "Dihitung, belum diterapkan", Nilai: cntHitung, Cls: cntHitung > 0 ? "text-warning" : "", Filter: "dihitung"),
+        (Nama: "Sudah diterapkan ke stok", Nilai: cntApplied, Cls: "text-success", Filter: "diterapkan")
+    })
+    {
+        <div class="col-6 col-md-3">
+            <a asp-action="Detail" asp-route-id="@Model.Id" asp-route-show="@k.Filter" class="text-decoration-none text-reset">
+                <div class="card shadow-sm h-100 @(show == k.Filter ? "border-primary" : "")"><div class="card-body py-2">
+                    <div class="text-muted small">@k.Nama</div><div class="fs-3 fw-bold lh-1 @k.Cls">@k.Nilai</div>
+                </div></div>
+            </a>
+        </div>
+    }
+</div>
+
+<form method="post" id="opnameForm" autocomplete="off">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="show" value="@show" />
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-semibold">@items.Count obat ditampilkan</span>
+                <input type="search" id="rowSearch" class="form-control form-control-sm" style="width: 220px" placeholder="Cari obat..." />
+            </div>
+            @if (open)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm" asp-action="Save" asp-route-id="@Model.Id">Simpan Hitungan</button>
+                    <button type="submit" class="btn btn-outline-primary btn-sm" name="mode" value="selected" asp-action="Apply" asp-route-id="@Model.Id" data-apply="Terapkan selisih obat yang dicentang ke stok?">Terapkan yang dicentang</button>
+                    <button type="submit" class="btn btn-warning btn-sm" name="mode" value="all" asp-action="Apply" asp-route-id="@Model.Id" data-apply="Terapkan selisih SEMUA obat yang sudah dihitung ke stok? Stok akan berubah dan tercatat di kartu stok.">Terapkan semua yang dihitung</button>
+                </div>
+            }
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" id="opTable">
+                <thead class="table-light">
+                    <tr>
+                        @if (open) { <th style="width: 2rem"><input type="checkbox" class="form-check-input" id="chkAll" title="Centang semua yang bisa diterapkan" /></th> }
+                        <th>Obat</th>
+                        <th class="text-end">Stok sistem</th>
+                        <th>Stok fisik</th>
+                        <th class="text-end">Selisih</th>
+                        <th>Catatan</th>
+                        <th>Terakhir dihitung</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var idx = 0; }
+                    @foreach (var i in items)
+                    {
+                        var locked = !open || i.IsApplied;
+                        var reference = i.IsCounted ? i.StokSistem ?? i.StokSekarang : i.StokSekarang;
+                        <tr class="@(i.IsApplied ? "op-row-applied" : "")" data-name="@i.NamaSnapshot.ToLowerInvariant()">
+                            @if (open)
+                            {
+                                <td>
+                                    @if (i.IsCounted && !i.IsApplied)
+                                    {
+                                        <input type="checkbox" class="form-check-input apply-cb" name="applyIds" value="@i.Id" />
+                                    }
+                                </td>
+                            }
+                            <td>
+                                <div class="fw-semibold">@i.NamaSnapshot</div>
+                                <div class="small text-muted">@i.SatuanSnapshot@(i.StokMinimum > 0 ? $" · min {i.StokMinimum}" : "")@(!i.MedicineActive ? " · nonaktif" : "")</div>
+                            </td>
+                            <td class="text-end">
+                                <span class="fw-semibold">@reference</span>
+                                @if (i.IsCounted && !i.IsApplied && i.StokSekarang != reference)
+                                {
+                                    <div class="small text-muted" title="Stok berubah (mis. kunjungan klinik) setelah dihitung. Selisih diterapkan relatif, jadi perubahan itu tidak tertimpa.">sekarang @i.StokSekarang</div>
+                                }
+                            </td>
+                            <td>
+                                <input type="hidden" name="counts[@idx].ItemId" value="@i.Id" />
+                                <input type="number" min="0" max="10000000" class="form-control form-control-sm op-input op-fisik" name="counts[@idx].StokFisik"
+                                       value="@i.StokFisik" data-ref="@reference" disabled="@locked" placeholder="belum" />
+                            </td>
+                            <td class="text-end op-diff" data-applied="@(i.IsApplied ? i.AppliedDelta?.ToString() : "")">
+                                @if (i.IsApplied) { <span class="@((i.AppliedDelta ?? 0) > 0 ? "op-diff-plus" : (i.AppliedDelta ?? 0) < 0 ? "op-diff-minus" : "text-muted")">@(i.AppliedDelta is int ad ? ad.ToString("+#;-#;0") : "0")</span> }
+                            </td>
+                            <td><input type="text" class="form-control form-control-sm" maxlength="250" name="counts[@idx].Catatan" value="@i.Catatan" disabled="@locked" placeholder="opsional" /></td>
+                            <td class="small">
+                                @if (i.IsCounted) { <div>@Day(i.CountedAt)</div><div class="text-muted">@i.CountedBy</div> } else { <span class="text-muted">-</span> }
+                            </td>
+                            <td>
+                                @if (i.IsApplied) { <span class="badge bg-success">Diterapkan</span><div class="small text-muted">@Day(i.AppliedAt)</div> }
+                                else if (i.IsCounted) { <span class="badge bg-warning text-dark">Dihitung</span> }
+                                else { <span class="badge bg-secondary">Belum dihitung</span> }
+                            </td>
+                        </tr>
+                        idx++;
+                    }
+                    @if (items.Count == 0)
+                    {
+                        <tr><td colspan="@(open ? 8 : 7)" class="text-center text-muted py-4">Tidak ada obat pada filter ini.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @if (open)
+    {
+        <div class="small text-muted mt-2">
+            Kosongkan stok fisik kalau belum dihitung. <strong>Simpan Hitungan</strong> boleh sebagian; tanggal dan pengisi hanya berubah untuk obat yang Anda ubah.
+            Selisih dihitung dari stok sistem saat hitungan disimpan, sehingga kunjungan klinik sesudahnya tidak tertimpa.
+        </div>
+    }
+</form>
+
+@if (open)
+{
+    <div class="row g-3 mt-1">
+        @if (notIncluded.Count > 0)
+        {
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-1">Tambah obat ke opname ini</div>
+                        <div class="small text-muted mb-2">Obat aktif yang belum masuk (@notIncluded.Count). Berguna kalau ada obat baru atau opname dimulai parsial.</div>
+                        <form asp-action="AddMedicines" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
+                            <select name="medicineIds" class="form-select form-select-sm" multiple size="4">
+                                @foreach (var m in notIncluded) { <option value="@m.Id">@m.Name (@m.Satuan)</option> }
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary align-self-start">Tambah</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-success-subtle">
+                <div class="card-body">
+                    <div class="fw-semibold mb-1">Selesaikan opname</div>
+                    <div class="small text-muted mb-2">Menutup opname ini. Obat yang belum dihitung ditandai di laporan. Semua hitungan harus sudah diterapkan dulu.</div>
+                    <form asp-action="Finish" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('Selesaikan opname ini? Setelah ditutup, hitungan tidak bisa diubah.');">
+                        <button type="submit" class="btn btn-success btn-sm">Selesaikan Opname</button>
+                    </form>
+                    @if (cntApplied == 0)
+                    {
+                        <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('Batalkan opname ini?');">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Batalkan Opname</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            const fmt = (n) => (n > 0 ? '+' : '') + n;
+            // Selisih langsung terlihat saat mengetik: fisik - stok sistem
+            document.querySelectorAll('#opTable tbody tr').forEach((tr) => {
+                const input = tr.querySelector('.op-fisik'), cell = tr.querySelector('.op-diff');
+                if (!input || input.disabled) return;
+                const upd = () => {
+                    if (input.value === '') { cell.innerHTML = ''; return; }
+                    const d = Number(input.value) - Number(input.dataset.ref);
+                    cell.innerHTML = `<span class="${d > 0 ? 'op-diff-plus' : d < 0 ? 'op-diff-minus' : 'text-muted'}">${fmt(d)}</span>`;
+                };
+                input.addEventListener('input', upd); upd();
+            });
+
+            const q = document.getElementById('rowSearch');
+            if (q) q.addEventListener('input', () => {
+                const t = q.value.trim().toLowerCase();
+                document.querySelectorAll('#opTable tbody tr[data-name]').forEach((tr) => { tr.style.display = !t || tr.dataset.name.includes(t) ? '' : 'none'; });
+            });
+
+            const all = document.getElementById('chkAll');
+            if (all) all.addEventListener('change', () => document.querySelectorAll('.apply-cb').forEach((c) => { c.checked = all.checked; }));
+
+            // Konfirmasi sebelum menerapkan selisih ke stok
+            document.querySelectorAll('[data-apply]').forEach((b) => b.addEventListener('click', (e) => {
+                if (!confirm(b.dataset.apply)) e.preventDefault();
+            }));
+        })();
+    </script>
+}

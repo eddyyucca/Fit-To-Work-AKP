@@ -1,0 +1,72 @@
+@model List<StockOpname>
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Stok Opname Obat";
+    Layout = "_AdminLayout";
+    var overdue = (int)ViewBag.Overdue;
+    var never = (int)ViewBag.NeverCounted;
+    var days = (int)ViewBag.OverdueDays;
+    string Local(DateTime? utc) => utc is null ? "-" : Clock.ToLocal(DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc)).ToString("dd/MM/yyyy HH:mm");
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h4 class="mb-0">Stok Opname Obat</h4>
+        <div class="text-muted small">Hitung stok fisik per periode. Boleh <strong>parsial</strong>: simpan sebagian dulu, lanjutkan kapan saja. Stok baru berubah saat selisih <strong>diterapkan</strong>.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a asp-controller="Medicines" asp-action="Index" class="btn btn-outline-secondary btn-sm">Obat &amp; Stok</a>
+        <a asp-action="Create" class="btn btn-primary btn-sm">+ Opname Baru</a>
+    </div>
+</div>
+
+@if (never > 0 || overdue > 0)
+{
+    <div class="alert alert-warning py-2 small">
+        &#9888;
+        @if (never > 0) { <span><strong>@never obat</strong> belum pernah diopname. </span> }
+        @if (overdue > 0) { <span><strong>@overdue obat</strong> terakhir dihitung lebih dari @days hari lalu. </span> }
+        Buat opname periode ini untuk menghitungnya.
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Periode</th><th>Status</th><th style="min-width: 190px">Progres dihitung</th>
+                    <th class="text-end">Diterapkan</th><th>Terakhir diisi</th><th>Dibuat oleh</th><th class="text-end">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in Model)
+                {
+                    var pct = o.TotalItem > 0 ? o.Dihitung * 100 / o.TotalItem : 0;
+                    <tr class="@(o.Status == OpnameStatuses.Batal ? "text-muted" : "")">
+                        <td>
+                            <div class="fw-semibold">@o.PeriodeLabel</div>
+                            <div class="small text-muted">@o.PeriodeMulai.ToString("dd/MM/yyyy") &ndash; @o.PeriodeSelesai.ToString("dd/MM/yyyy")</div>
+                        </td>
+                        <td><span class="badge @OpnameStatuses.BadgeClass(o.Status)">@o.Status</span></td>
+                        <td>
+                            <div class="progress" style="height: 8px"><div class="progress-bar @(pct == 100 ? "bg-success" : "")" style="width: @pct%"></div></div>
+                            <div class="small text-muted">@o.Dihitung dari @o.TotalItem obat dihitung@(o.BelumDihitung > 0 ? $" · {o.BelumDihitung} belum" : "")</div>
+                        </td>
+                        <td class="text-end">@o.Diterapkan / @o.TotalItem@(o.Menunggu > 0 ? Html.Raw($" <span class=\"badge bg-warning text-dark\">{o.Menunggu} menunggu</span>") : "")</td>
+                        <td class="small">@Local(o.LastFilledAt)</td>
+                        <td class="small">@o.CreatedBy</td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm @(o.IsOpen ? "btn-primary" : "btn-outline-secondary")" asp-action="Detail" asp-route-id="@o.Id">@(o.IsOpen ? "Lanjutkan" : "Lihat")</a>
+                            <a class="btn btn-sm btn-outline-success" asp-action="Export" asp-route-id="@o.Id" title="Download Excel">&#128229;</a>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">Belum ada stok opname. Klik <strong>+ Opname Baru</strong> untuk memulai.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

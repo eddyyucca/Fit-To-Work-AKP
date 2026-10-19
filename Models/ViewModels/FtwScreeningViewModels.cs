@@ -32,12 +32,21 @@ namespace FitToWorkApp.Models.ViewModels
         public DateTime? IstirahatDari { get; set; }
         public DateTime? IstirahatSampai { get; set; }
 
+        // Follow up online terbaru (bukan kunjungan klinik)
+        public int? OnlineId { get; set; }
+        public string? OnlineHasil { get; set; }
+        public bool? OnlineClosed { get; set; }
+        public DateTime? OnlineNext { get; set; }
+
         // Diisi controller
         public DateTime Tanggal { get; set; }                       // tanggal lokal site saat mengisi
         public string HasilPemeriksaan { get; set; } = string.Empty;
         public string Tindakan { get; set; } = string.Empty;
         public string RekomendasiText { get; set; } = string.Empty;
         public bool Diperiksa => KlinikUtc is not null;
+        public bool Close { get; set; }                             // kasus selesai: diperiksa klinik atau follow up online ditutup
+        public string StatusKasus { get; set; } = string.Empty;     // teks status kasus; diawali "Selesai" atau "Belum close"
+        public string StatusDetail { get; set; } = string.Empty;
     }
 
     public class FtwScreeningViewModel
@@ -52,6 +61,7 @@ namespace FitToWorkApp.Models.ViewModels
         public bool Truncated { get; set; }
         public int Total { get; set; }
         public int Diperiksa { get; set; }
+        public int BelumClose { get; set; }
         public List<FtwScreeningRow> Rows { get; set; } = new();
     }
 }

@@ -173,8 +173,8 @@
                         }
                         @if (anyMedical || access.Has(Permissions.MedicalMaster))
                         {
-                            <li class="nav-item @Open("ClinicVisits", "ClinicTriages", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
-                                <a href="#" class="nav-link @Active("ClinicVisits", "ClinicTriages", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                            <li class="nav-item @Open("ClinicVisits", "ClinicTriages", "StockOpnames", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
+                                <a href="#" class="nav-link @Active("ClinicVisits", "ClinicTriages", "StockOpnames", "ClinicReports", "Checkups", "DrugTests", "MedicalRecord", "Medicines", "Diseases", "HealthReferences", "CheckupParameters")">
                                     <i class="nav-icon bi bi-hospital"></i>
                                     <p>Klinik &amp; Kesehatan<i class="nav-arrow bi bi-chevron-right"></i></p>
                                 </a>
@@ -234,6 +234,11 @@
                                         <li class="nav-item">
                                             <a class="nav-link @Active("Medicines")" asp-area="" asp-controller="Medicines" asp-action="Index">
                                                 <i class="nav-icon bi bi-circle"></i><p>Obat &amp; Stok</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @Active("StockOpnames")" asp-area="" asp-controller="StockOpnames" asp-action="Index">
+                                                <i class="nav-icon bi bi-circle"></i><p>Stok Opname Obat</p>
                                             </a>
                                         </li>
                                     }

@@ -30,14 +30,19 @@ namespace FitToWorkApp.Controllers.Admin
         private static readonly string[] HariId = { "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu" };
 
         private readonly IFtwReportRepository _repo;
+        private readonly IFtwFollowUpRepository _followUpRepo;
+        private readonly IFitToWorkRepository _ftwRepository;
         private readonly IOrganizationRepository _orgRepository;
         private readonly IFormOptionRepository _formOptions;
         private readonly IPermissionService _permissions;
         private readonly IAppClock _clock;
 
         public FtwReportsController(IFtwReportRepository repo, IOrganizationRepository orgRepository,
-            IFormOptionRepository formOptions, IPermissionService permissions, IAppClock clock)
+            IFormOptionRepository formOptions, IPermissionService permissions, IAppClock clock,
+            IFtwFollowUpRepository followUpRepo, IFitToWorkRepository ftwRepository)
         {
+            _followUpRepo = followUpRepo;
+            _ftwRepository = ftwRepository;
             _repo = repo;
             _orgRepository = orgRepository;
             _formOptions = formOptions;
@@ -151,6 +156,15 @@ namespace FitToWorkApp.Controllers.Admin
                 e => e.GejalaKesehatan, e => e.JamTidur, e => e.KualitasTidur, e => e.KondisiFokus, e => e.KonsumsiObat,
                 e => e.TidakFit7Hari, e => e.Status, e => e.Prioritas ? "Ya" : "", e => e.IsiUlangFitUtc is DateTime t ? (object)_clock.ToLocal(t) : null
             };
+            headers.AddRange(new[] { "Follow up online", "Kanal", "Waktu follow up", "Oleh", "Catatan follow up", "Jumlah follow up", "Kasus selesai", "Follow up berikutnya" });
+            cols.Add(e => e.OnlineId.HasValue ? FtwFollowUpHasil.Label(e.OnlineHasil) : null);
+            cols.Add(e => e.OnlineKanal is null ? null : FtwFollowUpKanal.Label(e.OnlineKanal));
+            cols.Add(e => e.OnlineAtUtc is DateTime t ? (object)_clock.ToLocal(t) : null);
+            cols.Add(e => e.OnlineBy);
+            cols.Add(e => e.OnlineCatatan);
+            cols.Add(e => e.OnlineCount);
+            cols.Add(e => e.OnlineId.HasValue ? (e.OnlineClosed == true ? "Ya" : "Belum") : null);
+            cols.Add(e => e.OnlineNext is DateTime nx && e.OnlineClosed != true ? (object)nx.Date : null);
             if (vm.CanSeeClinic)
             {
                 headers.AddRange(new[] { "Kunjungan klinik", "Rekomendasi klinik", "Hari istirahat" });
@@ -161,6 +175,64 @@ namespace FitToWorkApp.Controllers.Admin
             ReportExcel.WriteTable(ws, r, "Kejadian tidak fit", headers.ToArray(), vm.Rows, cols.ToArray());
 
             return ExcelFile(wb, $"TindakLanjut_TidakFit_{vm.From:yyyyMMdd}_{vm.To:yyyyMMdd}.xlsx");
+        }
+
+        // ============================ Follow up online ============================
+
+        // Mencatat hasil menghubungi karyawan (WhatsApp / telepon). TIDAK membuat kunjungan klinik dan tidak masuk laporan klinik.
+        [HttpPost("FollowUps/Online")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> FollowUpOnline(int ftwId, string? kanal, string? hasil, string? catatan, bool? closed, DateTime? next,
+            string? from, string? to, string? department, string? status)
+        {
+            var back = RedirectToAction(nameof(FollowUps), new { from, to, department, status });
+            if (!await _followUpRepo.IsAvailableAsync())
+            {
+                TempData["Error"] = "Fitur follow up online belum aktif di database (jalankan migration_ftw_followup_online.sql).";
+                return back;
+            }
+            if (!FtwFollowUpKanal.All.Contains(kanal ?? "") || !FtwFollowUpHasil.All.Contains(hasil ?? ""))
+            {
+                TempData["Error"] = "Pilih kanal dan hasil follow up.";
+                return back;
+            }
+            var ftw = await _ftwRepository.GetByIdAsync(ftwId);
+            if (ftw is null || ftw.KesiapanKerja.StartsWith("YA", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["Error"] = "Kejadian tidak fit tidak ditemukan.";
+                return back;
+            }
+
+            var note = string.IsNullOrWhiteSpace(catatan) ? null : catatan.Trim();
+            if (note is { Length: > 1000 }) note = note[..1000];
+
+            // Kasus ditutup hanya kalau masalahnya selesai. Yang belum selesai tetap terbuka dan WAJIB punya jadwal follow up berikutnya
+            // (default besok; maksimal 30 hari ke depan), supaya tidak terlupakan dan bisa ditandai terlambat.
+            var isClosed = closed ?? hasil == FtwFollowUpHasil.Membaik;
+            DateTime? nextDate = null;
+            if (!isClosed)
+            {
+                var today = _clock.Today;
+                nextDate = next?.Date ?? today.AddDays(hasil == FtwFollowUpHasil.PerluKlinik ? 0 : 1);
+                if (nextDate < today) nextDate = today;
+                if (nextDate > today.AddDays(30)) nextDate = today.AddDays(30);
+            }
+            await _followUpRepo.AddAsync(new FtwFollowUpLog
+            {
+                FtwSubmissionId = ftw.Id,
+                Kanal = kanal!,
+                Hasil = hasil!,
+                Catatan = note,
+                FollowUpAt = DateTime.UtcNow,
+                IsClosed = isClosed,
+                NextFollowUpDate = nextDate,
+                ByAdminId = User.AdminId(),
+                ByName = User.AdminName()
+            });
+            TempData["Success"] = isClosed
+                ? $"Follow up online {ftw.NamaSnapshot} dicatat ({FtwFollowUpHasil.Label(hasil)}). Kasus ditutup. Tidak dihitung sebagai kunjungan klinik."
+                : $"Follow up online {ftw.NamaSnapshot} dicatat ({FtwFollowUpHasil.Label(hasil)}). Kasus BELUM selesai; follow up berikutnya {nextDate:dd/MM/yyyy}. Tidak dihitung sebagai kunjungan klinik.";
+            return back;
         }
 
         // ============================ Hasil screening FTW & pemeriksaan ============================
@@ -179,7 +251,7 @@ namespace FitToWorkApp.Controllers.Admin
         {
             var vm = await BuildScreeningAsync(from, to, department, scope, ScreeningExcelMax);
             var clinic = vm.CanSeeClinic;
-            var lastCol = clinic ? 14 : 11;
+            var lastCol = clinic ? 15 : 11;
 
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Screening FTW");
@@ -208,7 +280,7 @@ namespace FitToWorkApp.Controllers.Admin
             for (var i = 0; i < sub.Length; i++) ws.Cell(h2, 7 + i).Value = sub[i];
             if (clinic)
             {
-                string[] result = { "HASIL PEMERIKSAAN", "TINDAKAN", "REKOMENDASI" };
+                string[] result = { "HASIL PEMERIKSAAN", "TINDAKAN", "REKOMENDASI", "STATUS KASUS" };
                 for (var i = 0; i < result.Length; i++)
                 {
                     ws.Cell(h1, 12 + i).Value = result[i];
@@ -242,6 +314,7 @@ namespace FitToWorkApp.Controllers.Admin
                     ReportExcel.SetCell(ws.Cell(r, 12), x.HasilPemeriksaan);
                     ReportExcel.SetCell(ws.Cell(r, 13), x.Tindakan);
                     ReportExcel.SetCell(ws.Cell(r, 14), x.RekomendasiText);
+                    ReportExcel.SetCell(ws.Cell(r, 15), x.StatusKasus);
                 }
                 r++;
             }
@@ -256,7 +329,7 @@ namespace FitToWorkApp.Controllers.Admin
                 body.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 body.Style.Alignment.WrapText = true;
                 body.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                if (clinic) ws.Range(first, 12, last, 14).Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F2F2");
+                if (clinic) ws.Range(first, 12, last, 15).Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F2F2");
             }
             else
             {
@@ -265,7 +338,7 @@ namespace FitToWorkApp.Controllers.Admin
                 ws.Cell(first, 1).Style.Font.Italic = true;
             }
 
-            double[] widths = { 5, 12, 28, 14, 14, 16, 14, 30, 26, 28, 14, 32, 34, 24 };
+            double[] widths = { 5, 12, 28, 14, 14, 16, 14, 30, 26, 28, 14, 32, 34, 24, 34 };
             for (var c = 1; c <= lastCol; c++) ws.Column(c).Width = widths[c - 1];
 
             ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
@@ -285,7 +358,7 @@ namespace FitToWorkApp.Controllers.Admin
             var canClinic = access.Has(Permissions.MedicalVisit);
             var rg = Range(from, to, department, _clock.Today.AddDays(-6));
 
-            var rows = await _repo.GetScreeningAsync(rg.Filter, canClinic, max + 1);
+            var rows = await _repo.GetScreeningAsync(rg.Filter, canClinic, max + 1, await _repo.IsOnlineFollowUpAvailableAsync());
             var truncated = rows.Count > max;
             if (truncated) rows = rows.Take(max).ToList();
 
@@ -305,6 +378,18 @@ namespace FitToWorkApp.Controllers.Admin
                 if (!string.IsNullOrWhiteSpace(r.Obat)) tindakan.Add(r.Obat.Trim());
                 if (!string.IsNullOrWhiteSpace(r.CatatanRekomendasi)) tindakan.Add(r.CatatanRekomendasi.Trim());
                 r.Tindakan = string.Join("\n", tindakan);
+
+                // Status kasus: Selesai bila sudah diperiksa klinik atau follow up online ditutup; selain itu Belum close
+                if (r.Diperiksa) { r.Close = true; r.StatusDetail = "diperiksa klinik"; }
+                else if (r.OnlineId.HasValue && r.OnlineClosed == true) { r.Close = true; r.StatusDetail = "follow up online: " + FtwFollowUpHasil.Label(r.OnlineHasil); }
+                else if (r.OnlineId.HasValue)
+                {
+                    var late = r.OnlineNext is DateTime nd && nd.Date < _clock.Today;
+                    r.StatusDetail = "online: " + FtwFollowUpHasil.Label(r.OnlineHasil)
+                        + (r.OnlineNext is DateTime n2 ? $", follow up {n2:dd/MM/yyyy}{(late ? " (terlambat)" : "")}" : "");
+                }
+                else r.StatusDetail = "belum ditindaklanjuti";
+                r.StatusKasus = (r.Close ? "Selesai" : "Belum close") + " - " + r.StatusDetail;
 
                 // Istilah "LANJUT BEKERJA" mengikuti format laporan yang dipakai (di aplikasi: "Kembali bekerja")
                 r.RekomendasiText = r.Rekomendasi is null
@@ -326,7 +411,8 @@ namespace FitToWorkApp.Controllers.Admin
                 CanSeeClinic = canClinic,
                 Truncated = truncated,
                 Total = rows.Count,
-                Diperiksa = rows.Count(r => r.Diperiksa)
+                Diperiksa = rows.Count(r => r.Diperiksa),
+                BelumClose = rows.Count(r => !r.Close)
             };
             vm.Rows = rows
                 .Where(r => !onlyExamined || r.Diperiksa)
@@ -491,9 +577,10 @@ namespace FitToWorkApp.Controllers.Admin
             var canClinic = access.Has(Permissions.MedicalVisit);
             var canTriage = access.Has(Permissions.MedicalTriage) || canClinic;
             var triageAvailable = await _repo.IsTriageAvailableAsync();
+            var onlineAvailable = await _repo.IsOnlineFollowUpAvailableAsync();
             var rg = Range(from, to, department, _clock.Today.AddDays(-6));
 
-            var rows = await _repo.GetUnfitEventsAsync(rg.Filter, canClinic, FollowUpMax + 1, triageAvailable);
+            var rows = await _repo.GetUnfitEventsAsync(rg.Filter, canClinic, FollowUpMax + 1, triageAvailable, onlineAvailable);
             var truncated = rows.Count > FollowUpMax;
             if (truncated) rows = rows.Take(FollowUpMax).ToList();
 
@@ -515,6 +602,19 @@ namespace FitToWorkApp.Controllers.Admin
                 {
                     r.StatusKode = "triage";
                     r.Status = "Pemeriksaan awal: menunggu dokter";
+                }
+                else if (r.OnlineId.HasValue && r.OnlineClosed == true)
+                {
+                    // Dihubungi dan masalah selesai: kasus ditutup. TIDAK dihitung sebagai kunjungan klinik.
+                    r.StatusKode = "online";
+                    r.Status = "Follow up online: selesai (" + FtwFollowUpHasil.Label(r.OnlineHasil) + ")";
+                }
+                else if (r.OnlineId.HasValue)
+                {
+                    // Dihubungi tapi masalah BELUM selesai: kasus tetap terbuka sampai ditutup, ditandai terlambat kalau jadwal terlewat
+                    r.StatusKode = "lanjut";
+                    r.Status = "Follow up online: belum selesai (" + FtwFollowUpHasil.Label(r.OnlineHasil) + ")";
+                    r.LanjutTerlambat = r.OnlineNext is DateTime nd && nd.Date < _clock.Today;
                 }
                 else if (r.IsiUlangFitUtc is not null)
                 {
@@ -541,6 +641,7 @@ namespace FitToWorkApp.Controllers.Admin
                 CanTriage = canTriage,
                 CanDoctor = canClinic,
                 TriageAvailable = triageAvailable,
+                OnlineAvailable = onlineAvailable,
                 Truncated = truncated,
                 Kejadian = rows.Count,
                 KaryawanUnik = rows.Select(r => r.EmployeeId).Distinct().Count(),
@@ -548,13 +649,19 @@ namespace FitToWorkApp.Controllers.Admin
                 BelumPrioritas = rows.Count(r => r.StatusKode == "belum" && r.Prioritas),
                 Klinik = rows.Count(r => r.StatusKode == "klinik"),
                 MenungguDokter = rows.Count(r => r.StatusKode == "triage"),
+                Online = rows.Count(r => r.StatusKode == "online"),
+                Lanjut = rows.Count(r => r.StatusKode == "lanjut"),
+                LanjutTerlambat = rows.Count(r => r.StatusKode == "lanjut" && r.LanjutTerlambat),
                 IsiUlang = rows.Count(r => r.StatusKode == "isiulang")
             };
 
             var filter = (status ?? "all").Trim().ToLowerInvariant();
-            vm.Status = filter is "belum" or "triage" or "klinik" or "isiulang" ? filter : "all";
+            vm.Status = filter is "belum" or "triage" or "lanjut" or "online" or "klinik" or "isiulang" ? filter : "all";
 
-            static int Rank(FtwFollowUpRow r) => r.StatusKode == "belum" ? (r.Prioritas ? 0 : 1) : r.StatusKode == "triage" ? 2 : r.StatusKode == "isiulang" ? 3 : 4;
+            // Yang butuh tindakan di atas: belum ditangani, lalu follow up online belum selesai (terlambat dulu), lalu draft menunggu dokter
+            static int Rank(FtwFollowUpRow r) => r.StatusKode == "belum" ? (r.Prioritas ? 0 : 1)
+                : r.StatusKode == "lanjut" ? (r.LanjutTerlambat ? 2 : 3)
+                : r.StatusKode == "triage" ? 4 : r.StatusKode == "isiulang" ? 5 : r.StatusKode == "online" ? 6 : 7;
             vm.Rows = rows
                 .Where(r => vm.Status == "all" || r.StatusKode == vm.Status)
                 .OrderBy(Rank).ThenByDescending(r => r.WaktuUtc)

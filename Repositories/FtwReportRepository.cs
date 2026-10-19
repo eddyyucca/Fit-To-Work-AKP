@@ -23,13 +23,16 @@ namespace FitToWorkApp.Repositories
         Task<List<FtwNameCountRow>> GetUnfitBreakdownAsync(FtwReportFilter f);
         Task<int> GetOperationalDaysAsync(FtwReportFilter f);
 
-        Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false);
+        Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false, bool includeOnline = false);
+
+        /// <summary>True kalau tabel follow up online (dbo.FtwFollowUps) sudah ada di database.</summary>
+        Task<bool> IsOnlineFollowUpAvailableAsync();
 
         /// <summary>True kalau tabel pemeriksaan awal (dbo.ClinicTriages, kolom FtwSubmissionId) sudah ada di database.</summary>
         Task<bool> IsTriageAvailableAsync();
 
         /// <summary>Pengisian tidak fit + jawaban screening + (opsional) hasil pemeriksaan klinik dalam 48 jam berikutnya.</summary>
-        Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max);
+        Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max, bool includeOnline = false);
     }
 
     public class FtwReportRepository : IFtwReportRepository
@@ -172,8 +175,18 @@ namespace FitToWorkApp.Repositories
             return ListAsync<FtwNameCountRow>(sql, P(f));
         }
 
-        public Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max)
+        public Task<List<FtwScreeningRow>> GetScreeningAsync(FtwReportFilter f, bool includeClinic, int max, bool includeOnline = false)
         {
+            var onlineCols = includeOnline
+                ? "ol.Id AS OnlineId, ol.Hasil AS OnlineHasil, ol.IsClosed AS OnlineClosed, ol.NextFollowUpDate AS OnlineNext"
+                : "CAST(NULL AS INT) AS OnlineId, CAST(NULL AS NVARCHAR(40)) AS OnlineHasil, CAST(NULL AS BIT) AS OnlineClosed, CAST(NULL AS DATE) AS OnlineNext";
+            var onlineApply = includeOnline
+                ? @"OUTER APPLY (
+                        SELECT TOP 1 fu.Id, fu.Hasil, fu.IsClosed, fu.NextFollowUpDate
+                        FROM dbo.FtwFollowUps fu
+                        WHERE fu.FtwSubmissionId = s.Id
+                        ORDER BY fu.FollowUpAt DESC, fu.Id DESC) ol"
+                : "";
             var clinicCols = includeClinic
                 ? "cv.VisitAt AS KlinikUtc, dg.Diagnosa, cv.Pemeriksaan, ob.Obat, cv.CatatanRekomendasi, cv.Rekomendasi, cv.HariIstirahat, cv.IstirahatDari, cv.IstirahatSampai"
                 : @"CAST(NULL AS DATETIME2) AS KlinikUtc, CAST(NULL AS NVARCHAR(MAX)) AS Diagnosa, CAST(NULL AS NVARCHAR(1000)) AS Pemeriksaan,
@@ -205,12 +218,14 @@ namespace FitToWorkApp.Repositories
                        s.JadwalKerja,
                        CASE WHEN s.AreaKerja = 'Other' AND s.AreaKerjaLainnya IS NOT NULL AND s.AreaKerjaLainnya <> '' THEN s.AreaKerjaLainnya ELSE s.AreaKerja END AS AreaKerja,
                        s.JamTidur, s.KualitasTidur, s.GejalaKesehatan, s.KondisiFokus, s.KonsumsiObat, s.CreatedAt AS WaktuUtc,
-                       {clinicCols}
+                       {clinicCols},
+                       {onlineCols}
                 FROM dbo.FitToWorkSubmissions s
                 INNER JOIN dbo.Employees e ON e.Id = s.EmployeeId AND e.MitraId IS NULL
                 LEFT JOIN dbo.Departments d ON d.Id = e.DepartmentId
                 LEFT JOIN dbo.Sections sc ON sc.Id = e.SectionId
                 {clinicApply}
+                {onlineApply}
                 WHERE s.CreatedAt >= @FromUtc AND s.CreatedAt < @ToUtc
                   AND s.{NotFit}
                   AND (@Dept IS NULL OR d.Name = @Dept)
@@ -225,8 +240,25 @@ namespace FitToWorkApp.Repositories
                 "SELECT CASE WHEN OBJECT_ID('dbo.ClinicTriages', 'U') IS NOT NULL AND COL_LENGTH('dbo.ClinicTriages', 'FtwSubmissionId') IS NOT NULL THEN 1 ELSE 0 END") == 1;
         }
 
-        public Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false)
+        public async Task<bool> IsOnlineFollowUpAvailableAsync()
         {
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.ExecuteScalarAsync<int>("SELECT CASE WHEN OBJECT_ID('dbo.FtwFollowUps', 'U') IS NOT NULL AND COL_LENGTH('dbo.FtwFollowUps', 'IsClosed') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+        }
+
+        public Task<List<FtwFollowUpRow>> GetUnfitEventsAsync(FtwReportFilter f, bool includeClinic, int max, bool includeTriage = false, bool includeOnline = false)
+        {
+            var onlineCols = includeOnline
+                ? "ol.Id AS OnlineId, ol.Hasil AS OnlineHasil, ol.Kanal AS OnlineKanal, ol.FollowUpAt AS OnlineAtUtc, ol.ByName AS OnlineBy, ol.Catatan AS OnlineCatatan, ISNULL(ol.Jumlah, 0) AS OnlineCount, ol.IsClosed AS OnlineClosed, ol.NextFollowUpDate AS OnlineNext"
+                : "CAST(NULL AS INT) AS OnlineId, CAST(NULL AS NVARCHAR(40)) AS OnlineHasil, CAST(NULL AS NVARCHAR(30)) AS OnlineKanal, CAST(NULL AS DATETIME2) AS OnlineAtUtc, CAST(NULL AS NVARCHAR(150)) AS OnlineBy, CAST(NULL AS NVARCHAR(1000)) AS OnlineCatatan, CAST(0 AS INT) AS OnlineCount, CAST(NULL AS BIT) AS OnlineClosed, CAST(NULL AS DATE) AS OnlineNext";
+            var onlineApply = includeOnline
+                ? @"OUTER APPLY (
+                        SELECT TOP 1 fu.Id, fu.Hasil, fu.Kanal, fu.FollowUpAt, fu.ByName, fu.Catatan, fu.IsClosed, fu.NextFollowUpDate,
+                               (SELECT COUNT(1) FROM dbo.FtwFollowUps fu2 WHERE fu2.FtwSubmissionId = s.Id) AS Jumlah
+                        FROM dbo.FtwFollowUps fu
+                        WHERE fu.FtwSubmissionId = s.Id
+                        ORDER BY fu.FollowUpAt DESC, fu.Id DESC) ol"
+                : "";
             var triageCols = includeTriage
                 ? "tr.Id AS TriageId, tr.Status AS TriageStatus, tr.VisitId AS TriageVisitId"
                 : "CAST(NULL AS INT) AS TriageId, CAST(NULL AS NVARCHAR(20)) AS TriageStatus, CAST(NULL AS INT) AS TriageVisitId";
@@ -266,13 +298,15 @@ namespace FitToWorkApp.Repositories
                         WHERE s3.EmployeeId = s.EmployeeId AND s3.{NotFit}
                           AND s3.CreatedAt <= s.CreatedAt AND s3.CreatedAt > DATEADD(DAY, -7, s.CreatedAt)) AS TidakFit7Hari,
                        {clinicCols},
-                       {triageCols}
+                       {triageCols},
+                       {onlineCols}
                 FROM dbo.FitToWorkSubmissions s
                 INNER JOIN dbo.Employees e ON e.Id = s.EmployeeId AND e.MitraId IS NULL
                 LEFT JOIN dbo.Departments d ON d.Id = e.DepartmentId
                 LEFT JOIN dbo.Sections sc ON sc.Id = e.SectionId
                 {clinicApply}
                 {triageApply}
+                {onlineApply}
                 WHERE s.CreatedAt >= @FromUtc AND s.CreatedAt < @ToUtc
                   AND s.{NotFit}
                   AND (@Dept IS NULL OR d.Name = @Dept)

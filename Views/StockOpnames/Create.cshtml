@@ -1,0 +1,141 @@
+@model FitToWorkApp.Controllers.Admin.OpnameCreateViewModel
+@inject FitToWorkApp.Services.IAppClock Clock
+@{
+    ViewData["Title"] = "Opname Baru";
+    Layout = "_AdminLayout";
+    var meds = (List<Medicine>)ViewBag.Medicines;
+    var last = (Dictionary<int, MedicineLastOpname>)ViewBag.LastOpname;
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="small text-decoration-none">‹ Kembali ke Stok Opname</a>
+    <h4 class="mb-0 mt-1">Opname Baru</h4>
+    <div class="text-muted small">Pilih periode, lalu semua obat aktif atau hanya sebagian. Hitungan diisi bertahap setelah ini.</div>
+</div>
+
+<form asp-action="Create" method="post" autocomplete="off">
+    <div asp-validation-summary="All" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.IsValid ? "none" : "block")"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold">Periode</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="preset">Pilih periode</label>
+                        <select id="preset" class="form-select">
+                            <option value="bulan">Bulan ini</option>
+                            <option value="bulanlalu">Bulan lalu</option>
+                            <option value="triwulan">Triwulan ini</option>
+                            <option value="semester">Semester ini</option>
+                            <option value="tahun">Tahun ini</option>
+                            <option value="kustom">Kustom (isi sendiri)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="PeriodeLabel">Nama periode</label>
+                        <input asp-for="PeriodeLabel" class="form-control" maxlength="100" />
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" asp-for="PeriodeMulai">Mulai</label>
+                            <input asp-for="PeriodeMulai" type="date" class="form-control" asp-format="{0:yyyy-MM-dd}" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" asp-for="PeriodeSelesai">Selesai</label>
+                            <input asp-for="PeriodeSelesai" type="date" class="form-control" asp-format="{0:yyyy-MM-dd}" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label" asp-for="Catatan">Catatan <span class="text-muted small">(opsional)</span></label>
+                        <textarea asp-for="Catatan" class="form-control" rows="2" maxlength="500" placeholder="mis. opname rak A dulu, rak B minggu depan"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg">Buat Opname</button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Batal</a>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-semibold">Obat yang dihitung</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="Scope" id="scopeAll" value="all" checked="@(Model.Scope != "pilih")" />
+                            <label class="form-check-label" for="scopeAll">Semua obat aktif (@meds.Count)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="Scope" id="scopePilih" value="pilih" checked="@(Model.Scope == "pilih")" />
+                            <label class="form-check-label" for="scopePilih">Pilih sebagian saja <span class="text-muted small">(parsial, mis. satu rak / golongan)</span></label>
+                        </div>
+                    </div>
+                    <div id="pickBox" class="@(Model.Scope == "pilih" ? "" : "d-none")">
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <input type="search" id="medSearch" class="form-control form-control-sm" style="max-width: 260px" placeholder="Cari obat..." />
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="medAll">Centang yang tampil</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="medNone">Kosongkan</button>
+                            <span class="small text-muted align-self-center" id="medCount"></span>
+                        </div>
+                        <div class="border rounded" style="max-height: 420px; overflow:auto">
+                            <table class="table table-sm mb-0 align-middle" id="medTable">
+                                <thead class="table-light" style="position: sticky; top: 0"><tr><th style="width: 2rem"></th><th>Obat</th><th class="text-end">Stok</th><th>Opname terakhir</th></tr></thead>
+                                <tbody>
+                                    @foreach (var m in meds)
+                                    {
+                                        <tr>
+                                            <td><input type="checkbox" class="form-check-input med-cb" name="MedicineIds" value="@m.Id" checked="@Model.MedicineIds.Contains(m.Id)" /></td>
+                                            <td class="med-name">@m.Name <span class="text-muted small">(@m.Satuan)</span></td>
+                                            <td class="text-end">@m.Stok</td>
+                                            <td class="small text-muted">@(last.TryGetValue(m.Id, out var lo) ? Clock.ToLocal(DateTime.SpecifyKind(lo.CountedAt, DateTimeKind.Utc)).ToString("dd/MM/yyyy") + " · " + lo.PeriodeLabel : "belum pernah")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            const f = (d) => d.toISOString().substring(0, 10);
+            const ymd = (y, m, d) => new Date(Date.UTC(y, m, d));
+            const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            const label = document.getElementById('PeriodeLabel'), mulai = document.getElementById('PeriodeMulai'), selesai = document.getElementById('PeriodeSelesai');
+
+            function applyPreset(p) {
+                const now = new Date(); const y = now.getFullYear(), m = now.getMonth();
+                let a, b, text;
+                if (p === 'bulan') { a = ymd(y, m, 1); b = ymd(y, m + 1, 0); text = BULAN[m] + ' ' + y; }
+                else if (p === 'bulanlalu') { a = ymd(y, m - 1, 1); b = ymd(y, m, 0); text = BULAN[(m + 11) % 12] + ' ' + (m === 0 ? y - 1 : y); }
+                else if (p === 'triwulan') { const q = Math.floor(m / 3); a = ymd(y, q * 3, 1); b = ymd(y, q * 3 + 3, 0); text = 'Triwulan ' + ['I', 'II', 'III', 'IV'][q] + ' ' + y; }
+                else if (p === 'semester') { const s = m < 6 ? 0 : 6; a = ymd(y, s, 1); b = ymd(y, s + 6, 0); text = 'Semester ' + (s === 0 ? 'I' : 'II') + ' ' + y; }
+                else if (p === 'tahun') { a = ymd(y, 0, 1); b = ymd(y, 12, 0); text = 'Tahun ' + y; }
+                else return;
+                label.value = text; mulai.value = f(a); selesai.value = f(b);
+            }
+            document.getElementById('preset').addEventListener('change', (e) => applyPreset(e.target.value));
+
+            const pick = document.getElementById('pickBox');
+            document.querySelectorAll('input[name="Scope"]').forEach((r) => r.addEventListener('change', () => pick.classList.toggle('d-none', document.getElementById('scopePilih').checked === false)));
+
+            const rows = [...document.querySelectorAll('#medTable tbody tr')];
+            const count = () => { document.getElementById('medCount').textContent = document.querySelectorAll('.med-cb:checked').length + ' dipilih'; };
+            document.getElementById('medSearch').addEventListener('input', (e) => {
+                const q = e.target.value.trim().toLowerCase();
+                rows.forEach((tr) => { tr.style.display = !q || tr.querySelector('.med-name').textContent.toLowerCase().includes(q) ? '' : 'none'; });
+            });
+            document.getElementById('medAll').addEventListener('click', () => { rows.forEach((tr) => { if (tr.style.display !== 'none') tr.querySelector('.med-cb').checked = true; }); count(); });
+            document.getElementById('medNone').addEventListener('click', () => { rows.forEach((tr) => tr.querySelector('.med-cb').checked = false); count(); });
+            document.querySelectorAll('.med-cb').forEach((c) => c.addEventListener('change', count));
+            count();
+        })();
+    </script>
+}

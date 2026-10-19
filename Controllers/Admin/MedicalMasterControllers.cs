@@ -143,9 +143,12 @@ namespace FitToWorkApp.Controllers.Admin
         private readonly IMedicalLookupRepository _lookups;
         private readonly IMemoryCache _cache;
         private readonly IAppClock _clock;
+        private readonly IStockOpnameRepository _opnameRepo;
 
-        public MedicinesController(IMedicalMasterRepository repo, IMedicalLookupRepository lookups, IMemoryCache cache, IAppClock clock)
+        public MedicinesController(IMedicalMasterRepository repo, IMedicalLookupRepository lookups, IMemoryCache cache, IAppClock clock,
+            IStockOpnameRepository opnameRepo)
         {
+            _opnameRepo = opnameRepo;
             _repo = repo;
             _lookups = lookups;
             _cache = cache;
@@ -157,6 +160,7 @@ namespace FitToWorkApp.Controllers.Admin
         {
             // Dropdown satuan dari Master Data > Satuan Obat (yang aktif)
             ViewBag.SatuanOptions = await _lookups.GetNamesAsync(MedicalLookupKind.MedicineUnit);
+            ViewBag.LastOpname = await _opnameRepo.GetLastOpnameByMedicineAsync();   // kosong kalau migrasi opname belum dijalankan
             return View(await _repo.GetMedicinesAsync());
         }
 

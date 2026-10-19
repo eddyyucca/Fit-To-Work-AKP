@@ -1,4 +1,5 @@
 @model List<Medicine>
+@inject FitToWorkApp.Services.IAppClock Clock
 @{
     ViewData["Title"] = "Obat & Stok";
     Layout = "_AdminLayout";
@@ -31,6 +32,7 @@
                     <th>Satuan</th>
                     <th class="text-end">Stok</th>
                     <th class="text-end">Min.</th>
+                    <th>Opname terakhir</th>
                     <th>Status</th>
                     <th class="text-end">Aksi</th>
                 </tr>
@@ -55,6 +57,11 @@
                             }
                         </td>
                         <td class="text-end">@m.StokMinimum</td>
+                        @{ var lastOp = ((Dictionary<int, MedicineLastOpname>)ViewBag.LastOpname).TryGetValue(m.Id, out var lo) ? lo : null; }
+                        <td class="small" data-order="@(lastOp is null ? "" : lastOp.CountedAt.ToString("yyyyMMdd"))">
+                            @if (lastOp is null) { <span class="text-muted">belum pernah</span> }
+                            else { <div>@Clock.ToLocal(DateTime.SpecifyKind(lastOp.CountedAt, DateTimeKind.Utc)).ToString("dd/MM/yyyy")</div><div class="text-muted">@lastOp.PeriodeLabel</div> }
+                        </td>
                         <td>@(m.IsActive ? Html.Raw("<span class=\"badge bg-success\">Aktif</span>") : Html.Raw("<span class=\"badge bg-secondary\">Nonaktif</span>"))</td>
                         <td class="text-end text-nowrap">
                             <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#stockModal"

@@ -93,10 +93,20 @@ namespace FitToWorkApp.Models.ViewModels
         public int? TriageId { get; set; }                   // pemeriksaan awal perawat (draft / selesai) untuk kejadian ini
         public string? TriageStatus { get; set; }            // Draft | Selesai
         public int? TriageVisitId { get; set; }
+        public int? OnlineId { get; set; }                   // follow up online terbaru (BUKAN kunjungan klinik)
+        public string? OnlineHasil { get; set; }
+        public string? OnlineKanal { get; set; }
+        public DateTime? OnlineAtUtc { get; set; }
+        public string? OnlineBy { get; set; }
+        public string? OnlineCatatan { get; set; }
+        public int OnlineCount { get; set; }
+        public bool? OnlineClosed { get; set; }              // true = masalah selesai (kasus ditutup)
+        public DateTime? OnlineNext { get; set; }            // jadwal follow up berikutnya (tanggal lokal)
+        public bool LanjutTerlambat { get; set; }            // belum selesai dan jadwal follow up berikutnya sudah lewat
 
         // Diisi controller
         public string Status { get; set; } = string.Empty;
-        public string StatusKode { get; set; } = string.Empty;   // belum | triage | klinik | isiulang
+        public string StatusKode { get; set; } = string.Empty;   // belum | triage | lanjut (online, belum selesai) | online (online, selesai) | klinik | isiulang
         public bool Prioritas { get; set; }
         public int JamTerbuka { get; set; }                      // jam sejak pengisian (untuk yang belum ada tindak lanjut)
     }
@@ -152,6 +162,7 @@ namespace FitToWorkApp.Models.ViewModels
         public bool CanTriage { get; set; }              // boleh memulai pemeriksaan awal (medical.triage / medical.visit)
         public bool CanDoctor { get; set; }              // boleh melanjutkan sebagai dokter (medical.visit)
         public bool TriageAvailable { get; set; }        // tabel pemeriksaan awal sudah ada di database
+        public bool OnlineAvailable { get; set; }        // tabel follow up online sudah ada di database
         public bool Truncated { get; set; }
 
         public int Kejadian { get; set; }
@@ -160,6 +171,9 @@ namespace FitToWorkApp.Models.ViewModels
         public int BelumPrioritas { get; set; }
         public int Klinik { get; set; }
         public int MenungguDokter { get; set; }
+        public int Online { get; set; }              // follow up online, kasus selesai
+        public int Lanjut { get; set; }              // follow up online, kasus BELUM selesai
+        public int LanjutTerlambat { get; set; }     // ...dan jadwal berikutnya terlewat
         public int IsiUlang { get; set; }
 
         public List<FtwFollowUpRow> Rows { get; set; } = new();

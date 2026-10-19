@@ -126,17 +126,17 @@ BEGIN
         Id                  INT IDENTITY(1,1) PRIMARY KEY,
         EmployeeId          INT NOT NULL REFERENCES dbo.Employees(Id),
         NamaSnapshot        NVARCHAR(150) NOT NULL,   -- snapshot nama saat submit (jaga histori jika nama berubah)
-        SectionSnapshot     NVARCHAR(100) NOT NULL,
+        SectionSnapshot     NVARCHAR(150) NOT NULL,
         NomorHp             NVARCHAR(20)  NULL,
-        JadwalKerja         NVARCHAR(20)  NOT NULL,   -- NON SHIFT / SHIFT PAGI / SHIFT MALAM
-        AreaKerja           NVARCHAR(50)  NOT NULL,   -- LAPANGAN / OFFICE / LAPANGAN & OFFICE / Other
+        JadwalKerja         NVARCHAR(300) NOT NULL,   -- NON SHIFT / SHIFT PAGI / SHIFT MALAM (pilihan form, sampai 300 karakter)
+        AreaKerja           NVARCHAR(300) NOT NULL,   -- LAPANGAN / OFFICE / LAPANGAN & OFFICE / Other
         AreaKerjaLainnya    NVARCHAR(100) NULL,
-        JamTidur            NVARCHAR(20)  NOT NULL,
-        KualitasTidur       NVARCHAR(100) NOT NULL,
-        GejalaKesehatan     NVARCHAR(300) NOT NULL,   -- gabungan gejala dipisah koma, atau 'TIDAK ADA GEJALA'
-        KondisiFokus        NVARCHAR(100) NOT NULL,
+        JamTidur            NVARCHAR(300) NOT NULL,   -- mis. "< 5 Jam (kurang dari 5 jam)" (27 karakter)
+        KualitasTidur       NVARCHAR(300) NOT NULL,
+        GejalaKesehatan     NVARCHAR(1000) NOT NULL,  -- gabungan gejala dipisah koma, atau 'TIDAK ADA GEJALA'
+        KondisiFokus        NVARCHAR(300) NOT NULL,
         KonsumsiObat        NVARCHAR(10)  NOT NULL,   -- YA / TIDAK
-        KesiapanKerja       NVARCHAR(60)  NOT NULL,   -- FIT / TIDAK FIT
+        KesiapanKerja       NVARCHAR(300) NOT NULL,   -- FIT / TIDAK FIT
         CreatedAt           DATETIME2     NOT NULL DEFAULT(SYSUTCDATETIME())
     );
 
@@ -1461,4 +1461,127 @@ GO
 
 IF OBJECT_ID('dbo.ClinicTriages', 'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ClinicTriages_FtwSubmissionId' AND object_id = OBJECT_ID('dbo.ClinicTriages'))
     CREATE INDEX IX_ClinicTriages_FtwSubmissionId ON dbo.ClinicTriages(FtwSubmissionId) WHERE FtwSubmissionId IS NOT NULL;
+GO
+
+-- ============================================================
+-- Stok Opname Obat per periode, parsial (lihat migration_stock_opname.sql). Tabel baru, idempotent.
+-- ============================================================
+IF OBJECT_ID('dbo.StockOpnames', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.StockOpnames
+    (
+        Id             INT IDENTITY(1,1) PRIMARY KEY,
+        PeriodeLabel   NVARCHAR(100) NOT NULL,            -- mis. "Oktober 2026" / "Triwulan IV 2026"
+        PeriodeMulai   DATE NOT NULL,
+        PeriodeSelesai DATE NOT NULL,
+        Status         NVARCHAR(20) NOT NULL CONSTRAINT DF_StockOpnames_Status DEFAULT('Berjalan'),   -- Berjalan | Selesai | Batal
+        Catatan        NVARCHAR(500) NULL,
+        CreatedAt      DATETIME2 NOT NULL CONSTRAINT DF_StockOpnames_CreatedAt DEFAULT(SYSUTCDATETIME()),
+        CreatedBy      NVARCHAR(150) NOT NULL,
+        LastFilledAt   DATETIME2 NULL,                    -- terakhir ada hitungan yang diisi / diubah (UTC)
+        FinishedAt     DATETIME2 NULL,
+        FinishedBy     NVARCHAR(150) NULL,
+        CONSTRAINT CK_StockOpnames_Status CHECK (Status IN ('Berjalan', 'Selesai', 'Batal')),
+        CONSTRAINT CK_StockOpnames_Periode CHECK (PeriodeSelesai >= PeriodeMulai)
+    );
+
+    -- Satu opname aktif per periode (diisi parsial berkali-kali di opname yang sama, bukan membuat dobel)
+    CREATE UNIQUE INDEX UX_StockOpnames_Periode ON dbo.StockOpnames(PeriodeMulai, PeriodeSelesai) WHERE Status <> 'Batal';
+END
+GO
+
+IF OBJECT_ID('dbo.StockOpnameItems', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.StockOpnameItems
+    (
+        Id             INT IDENTITY(1,1) PRIMARY KEY,
+        OpnameId       INT NOT NULL CONSTRAINT FK_StockOpnameItems_Opname REFERENCES dbo.StockOpnames(Id) ON DELETE CASCADE,
+        MedicineId     INT NOT NULL CONSTRAINT FK_StockOpnameItems_Medicine REFERENCES dbo.Medicines(Id) ON DELETE CASCADE,
+        NamaSnapshot   NVARCHAR(150) NOT NULL,
+        SatuanSnapshot NVARCHAR(30) NOT NULL,
+        StokSistem     INT NULL,                          -- stok di sistem saat hitungan disimpan
+        StokFisik      INT NULL,                          -- NULL = belum dihitung
+        CountedAt      DATETIME2 NULL,                    -- tanggal pengisian hitungan (UTC)
+        CountedBy      NVARCHAR(150) NULL,
+        Catatan        NVARCHAR(250) NULL,
+        AppliedAt      DATETIME2 NULL,                    -- selisih sudah diterapkan ke stok (UTC)
+        AppliedDelta   INT NULL,
+        AppliedBy      NVARCHAR(150) NULL,
+        CONSTRAINT CK_StockOpnameItems_Fisik CHECK (StokFisik IS NULL OR StokFisik >= 0),
+        CONSTRAINT UQ_StockOpnameItems UNIQUE (OpnameId, MedicineId)
+    );
+
+    CREATE INDEX IX_StockOpnameItems_Medicine ON dbo.StockOpnameItems(MedicineId, CountedAt);
+END
+GO
+
+-- ============================================================
+-- Follow up online tindak lanjut FTW (tanpa kunjungan klinik). Lihat migration_ftw_followup_online.sql. Tabel baru, idempotent.
+-- ============================================================
+IF OBJECT_ID('dbo.FtwFollowUps', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.FtwFollowUps
+    (
+        Id              INT IDENTITY(1,1) PRIMARY KEY,
+        FtwSubmissionId INT NOT NULL CONSTRAINT FK_FtwFollowUps_Submissions REFERENCES dbo.FitToWorkSubmissions(Id) ON DELETE CASCADE,
+        Kanal           NVARCHAR(30) NOT NULL,            -- WhatsApp | Telepon | Pesan | Lainnya
+        Hasil           NVARCHAR(40) NOT NULL,            -- Membaik | MasihSakit | PerluKlinik | TidakDapatDihubungi | IstirahatDiRumah | Lainnya
+        Catatan         NVARCHAR(1000) NULL,
+        FollowUpAt      DATETIME2 NOT NULL,               -- waktu menghubungi (UTC)
+        IsClosed        BIT NOT NULL CONSTRAINT DF_FtwFollowUps_IsClosed DEFAULT(0),   -- 1 = masalah sudah selesai (kasus ditutup)
+        NextFollowUpDate DATE NULL,                -- jadwal follow up berikutnya (untuk kasus yang belum selesai)
+        ByAdminId       INT NULL,
+        ByName          NVARCHAR(150) NOT NULL,
+        CreatedAt       DATETIME2 NOT NULL CONSTRAINT DF_FtwFollowUps_CreatedAt DEFAULT(SYSUTCDATETIME()),
+        CONSTRAINT CK_FtwFollowUps_Kanal CHECK (Kanal IN ('WhatsApp', 'Telepon', 'Pesan', 'Lainnya')),
+        CONSTRAINT CK_FtwFollowUps_Hasil CHECK (Hasil IN ('Membaik', 'MasihSakit', 'PerluKlinik', 'TidakDapatDihubungi', 'IstirahatDiRumah', 'Lainnya'))
+    );
+
+    CREATE INDEX IX_FtwFollowUps_Submission ON dbo.FtwFollowUps(FtwSubmissionId, FollowUpAt DESC);
+END
+GO
+
+-- Kasus selesai / belum + jadwal follow up berikutnya. Untuk tabel yang sudah ada. Idempotent.
+IF OBJECT_ID('dbo.FtwFollowUps', 'U') IS NOT NULL AND COL_LENGTH('dbo.FtwFollowUps', 'IsClosed') IS NULL
+    ALTER TABLE dbo.FtwFollowUps ADD IsClosed BIT NOT NULL CONSTRAINT DF_FtwFollowUps_IsClosed DEFAULT(0);
+GO
+
+IF OBJECT_ID('dbo.FtwFollowUps', 'U') IS NOT NULL AND COL_LENGTH('dbo.FtwFollowUps', 'NextFollowUpDate') IS NULL
+    ALTER TABLE dbo.FtwFollowUps ADD NextFollowUpDate DATE NULL;
+GO
+
+-- ============================================================
+-- Pelebaran kolom jawaban FTW (pilihan form sampai 300 karakter). Lihat migration_ftw_widen_columns.sql. Idempotent.
+-- ============================================================
+DECLARE @cols TABLE (Nama SYSNAME, Karakter INT, NotNull BIT);
+INSERT @cols VALUES
+    ('SectionSnapshot', 150, 1),      -- nama section di master sampai 150 karakter
+    ('JadwalKerja',     300, 1),
+    ('AreaKerja',       300, 1),
+    ('JamTidur',        300, 1),
+    ('KualitasTidur',   300, 1),
+    ('KondisiFokus',    300, 1),
+    ('KesiapanKerja',   300, 1),
+    ('GejalaKesehatan', 1000, 1);     -- gabungan beberapa gejala dipisah koma
+
+DECLARE @n SYSNAME, @k INT, @nn BIT, @sql NVARCHAR(400), @ubah INT = 0;
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT Nama, Karakter, NotNull FROM @cols;
+OPEN c;
+FETCH NEXT FROM c INTO @n, @k, @nn;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    -- max_length dalam byte (NVARCHAR = 2 byte per karakter); -1 = MAX (sudah cukup)
+    IF EXISTS (SELECT 1 FROM sys.columns
+               WHERE object_id = OBJECT_ID('dbo.FitToWorkSubmissions') AND name = @n AND max_length <> -1 AND max_length < @k * 2)
+    BEGIN
+        SET @sql = N'ALTER TABLE dbo.FitToWorkSubmissions ALTER COLUMN ' + QUOTENAME(@n) + N' NVARCHAR(' + CAST(@k AS NVARCHAR(10)) + N')'
+                 + CASE WHEN @nn = 1 THEN N' NOT NULL' ELSE N' NULL' END;
+        EXEC sp_executesql @sql;
+        SET @ubah += 1;
+    END
+    FETCH NEXT FROM c INTO @n, @k, @nn;
+END
+CLOSE c;
+DEALLOCATE c;
+PRINT 'Kolom FitToWorkSubmissions dilebarkan (lihat migration_ftw_widen_columns.sql).';
 GO

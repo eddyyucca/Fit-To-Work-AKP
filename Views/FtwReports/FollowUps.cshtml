@@ -26,6 +26,8 @@
         {
             "klinik" => new HtmlString("<span class=\"badge bg-success\">Sudah ditangani klinik</span>"),
             "triage" => new HtmlString("<span class=\"badge bg-primary\">Draft: menunggu dokter</span>"),
+            "lanjut" => new HtmlString($"<span class=\"badge {(r.LanjutTerlambat ? "bg-danger" : "bg-warning text-dark")}\">{(r.LanjutTerlambat ? "Terlambat &middot; " : "")}Belum selesai: {FtwFollowUpHasil.Label(r.OnlineHasil)}</span>"),
+            "online" => new HtmlString($"<span class=\"badge bg-success\">Online selesai: {FtwFollowUpHasil.Label(r.OnlineHasil)}</span>"),
             "isiulang" => new HtmlString("<span class=\"badge bg-info text-dark\">Mengisi ulang: FIT</span>"),
             _ => r.Prioritas
                 ? new HtmlString("<span class=\"badge bg-danger\">Belum &middot; prioritas</span>")
@@ -33,8 +35,10 @@
         };
     }
 
-    var statusOptions = new[] { ("all", "Semua status"), ("belum", "Belum ada tindak lanjut"), ("triage", "Draft: menunggu dokter"), ("isiulang", "Mengisi ulang: FIT"), ("klinik", "Sudah ditangani klinik") };
-    var showActions = Model.CanTriage && Model.TriageAvailable;
+    var statusOptions = new[] { ("all", "Semua status"), ("belum", "Belum ada tindak lanjut"), ("triage", "Draft: menunggu dokter"), ("lanjut", "Online: belum selesai"), ("online", "Online: selesai"), ("isiulang", "Mengisi ulang: FIT"), ("klinik", "Sudah ditangani klinik") };
+    var showTriage = Model.CanTriage && Model.TriageAvailable;     // Kunjungan Langsung (Pemeriksaan Awal -> dokter)
+    var showOnline = Model.OnlineAvailable;                        // Follow Up Online (tanpa kunjungan klinik)
+    var showActions = showTriage || showOnline;
     var colCount = 8 + (Model.CanSeeClinic ? 1 : 0) + (showActions ? 1 : 0);
 }
 
@@ -110,6 +114,9 @@
         (Nama: "Belum ada tindak lanjut", Nilai: Model.Belum, Cls: Model.Belum > 0 ? "text-danger" : ""),
         (Nama: "…prioritas (berulang)", Nilai: Model.BelumPrioritas, Cls: Model.BelumPrioritas > 0 ? "text-danger" : ""),
         (Nama: "Draft: menunggu dokter", Nilai: Model.MenungguDokter, Cls: Model.MenungguDokter > 0 ? "text-primary" : ""),
+        (Nama: "Online: belum selesai", Nilai: Model.Lanjut, Cls: Model.Lanjut > 0 ? "text-warning" : ""),
+        (Nama: "...terlambat follow up", Nilai: Model.LanjutTerlambat, Cls: Model.LanjutTerlambat > 0 ? "text-danger" : ""),
+        (Nama: "Online: selesai", Nilai: Model.Online, Cls: "text-secondary"),
         (Nama: "Mengisi ulang: FIT", Nilai: Model.IsiUlang, Cls: "text-info"),
         (Nama: "Ditangani klinik", Nilai: Model.Klinik, Cls: "text-success")
     })
@@ -135,6 +142,9 @@
         <text>(kunjungan klinik tidak ditampilkan karena akun ini tidak punya izin Kunjungan Klinik, jadi kejadian yang sudah ditangani klinik tetap tampil &ldquo;Belum ada tindak lanjut&rdquo;); </text>
     }
     <strong>Draft: menunggu dokter</strong> = perawat sudah mencatat pemeriksaan awal dari kejadian ini (tombol <em>Pemeriksaan Awal</em>) dan dokter belum memfinalkannya;
+    <strong>Online: belum selesai</strong> = sudah dihubungi tapi masalah belum selesai; kasus tetap terbuka dan <strong>terlambat</strong> bila tanggal follow up berikutnya terlewat;
+    <strong>Online: selesai</strong> = kasus ditutup;
+    <strong>Follow up online</strong> = karyawan dihubungi lewat WhatsApp / telepon (tombol <em>Follow Up Online</em>), <u>tanpa</u> datang ke klinik, sehingga <strong>tidak dihitung sebagai kunjungan klinik</strong>;
     <strong>Mengisi ulang: FIT</strong> = mengisi ulang dan berstatus FIT dalam 24 jam;
     <strong>Prioritas</strong> = belum ada tindak lanjut dan sudah tidak fit 2 hari atau lebih dalam 7 hari terakhir.
     Halaman ini tidak mencatat tindak lanjut baru.
@@ -169,6 +179,15 @@
                             <td>
                                 @Badge(r)
                                 @if (r.StatusKode == "belum") { <div class="small text-muted">@(r.JamTerbuka < 24 ? r.JamTerbuka + " jam lalu" : (r.JamTerbuka / 24) + " hari lalu")</div> }
+                                @if (r.OnlineId.HasValue)
+                                {
+                                    @if (r.OnlineClosed != true && r.OnlineNext is DateTime nxt)
+                                    {
+                                        <div class="small @(r.LanjutTerlambat ? "text-danger fw-semibold" : "text-muted")">Follow up berikutnya: @nxt.ToString("dd/MM/yyyy")</div>
+                                    }
+                                    <div class="small text-muted">@FtwFollowUpKanal.Label(r.OnlineKanal ?? "") &middot; @(r.OnlineAtUtc is DateTime oa ? Clock.ToLocal(oa).ToString("dd/MM HH:mm") : "") &middot; @r.OnlineBy@(r.OnlineCount > 1 ? $" ({r.OnlineCount}x)" : "")</div>
+                                    @if (!string.IsNullOrWhiteSpace(r.OnlineCatatan)) { <div class="small fst-italic">&ldquo;@r.OnlineCatatan&rdquo;</div> }
+                                }
                             </td>
                             <td class="text-nowrap">@Clock.ToLocal(r.WaktuUtc).ToString("dd/MM/yyyy HH:mm")<div class="small text-muted">@r.JadwalKerja</div></td>
                             <td>@r.NIP</td>
@@ -209,9 +228,18 @@
                                             <a class="btn btn-sm btn-primary" asp-controller="ClinicVisits" asp-action="Create" asp-route-triageId="@r.TriageId">Lanjutkan (Dokter)</a>
                                         }
                                     }
-                                    else if (r.StatusKode is "belum" or "isiulang")
+                                    else if (r.StatusKode is "belum" or "isiulang" or "online" or "lanjut")
                                     {
-                                        <a class="btn btn-sm btn-outline-primary" asp-controller="ClinicTriages" asp-action="Create" asp-route-ftwId="@r.Id" title="Catat pemeriksaan awal untuk kejadian ini (dilanjutkan dokter di menu Pemeriksaan Dokter)">Pemeriksaan Awal</a>
+                                        @if (showTriage)
+                                        {
+                                            <a class="btn btn-sm @(r.OnlineHasil == FtwFollowUpHasil.PerluKlinik ? "btn-danger" : "btn-outline-primary")" asp-controller="ClinicTriages" asp-action="Create" asp-route-ftwId="@r.Id"
+                                               title="Karyawan datang ke klinik: dicatat perawat (Pemeriksaan Awal), lalu dokter. MASUK laporan kunjungan klinik setelah difinalkan dokter.">Kunjungan Langsung</a>
+                                        }
+                                        @if (showOnline)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#onlineModal"
+                                                    data-ftw="@r.Id" data-nama="@r.Nama" title="Hanya dihubungi (WhatsApp / telepon). TIDAK masuk laporan kunjungan klinik.">@(r.OnlineId.HasValue ? "Update Online" : "Follow Up Online")</button>
+                                        }
                                     }
                                     else { <span class="text-muted">-</span> }
                                 </td>
@@ -228,11 +256,84 @@
     </div>
 </div>
 
-<div class="text-muted small mt-3 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Halaman ini hanya membaca data; tidak mengubah data apa pun.</div>
+<div class="text-muted small mt-3 mb-2">Dibuat @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm") (waktu site). Laporan ini hanya membaca data kecuali saat Anda mencatat Follow Up Online atau Pemeriksaan Awal.</div>
+
+@if (showOnline)
+{
+    <div class="modal fade" id="onlineModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <form class="modal-content" asp-action="FollowUpOnline" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title">Follow Up Online: <span id="onlineNama"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="ftwId" id="onlineFtw" />
+                    <input type="hidden" name="from" value="@F(Model.From)" />
+                    <input type="hidden" name="to" value="@F(Model.To)" />
+                    <input type="hidden" name="department" value="@Model.Department" />
+                    <input type="hidden" name="status" value="@Model.Status" />
+                    <div class="alert alert-info py-2 small">Hanya mencatat hasil menghubungi karyawan. <strong>Tidak dihitung sebagai kunjungan klinik</strong> di dashboard maupun laporan klinik. Kalau karyawan perlu diperiksa langsung, pilih <em>Perlu datang ke klinik</em>, lalu pakai tombol <em>Kunjungan Langsung</em>.</div>
+                    <div class="mb-3">
+                        <label class="form-label" for="onlineKanal">Dihubungi lewat</label>
+                        <select class="form-select" name="kanal" id="onlineKanal" required>
+                            @foreach (var k in FtwFollowUpKanal.All) { <option value="@k">@FtwFollowUpKanal.Label(k)</option> }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="onlineHasil">Hasil / kondisi karyawan</label>
+                        <select class="form-select" name="hasil" id="onlineHasil" required>
+                            @foreach (var h in FtwFollowUpHasil.All) { <option value="@h">@FtwFollowUpHasil.Label(h)</option> }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="onlineClosed">Status kasus</label>
+                        <select class="form-select" name="closed" id="onlineClosed">
+                            <option value="true">Selesai: masalah sudah teratasi (kasus ditutup)</option>
+                            <option value="false">Belum selesai: tetap terbuka, follow up lagi</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="onlineNextWrap" style="display:none">
+                        <label class="form-label" for="onlineNext">Follow up berikutnya</label>
+                        <input type="date" class="form-control" name="next" id="onlineNext" />
+                        <div class="form-text">Kosong = besok (hari ini bila perlu ke klinik). Lewat tanggal ini kasus ditandai terlambat.</div>
+                    </div>
+                    <div>
+                        <label class="form-label" for="onlineCatatan">Catatan <span class="text-muted small">(opsional)</span></label>
+                        <textarea class="form-control" name="catatan" id="onlineCatatan" rows="3" maxlength="1000" placeholder="mis. sudah minum obat, istirahat 1 hari, kontrol besok jika demam"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan Follow Up</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
 
 @section Scripts {
     <script>
         (function () {
+            var om = document.getElementById('onlineModal');
+            if (om) om.addEventListener('show.bs.modal', function (e) {
+                var d = e.relatedTarget.dataset;
+                document.getElementById('onlineFtw').value = d.ftw;
+                document.getElementById('onlineNama').textContent = d.nama;
+                document.getElementById('onlineCatatan').value = '';
+                document.getElementById('onlineHasil').value = 'Membaik';
+                syncClosed();
+            });
+            function syncClosed() {
+                var closed = document.getElementById('onlineClosed'), h = document.getElementById('onlineHasil');
+                if (!closed || !h) return;
+                closed.value = h.value === 'Membaik' ? 'true' : 'false';
+                document.getElementById('onlineNextWrap').style.display = closed.value === 'true' ? 'none' : '';
+            }
+            var oh = document.getElementById('onlineHasil'), oc = document.getElementById('onlineClosed');
+            if (oh) oh.addEventListener('change', syncClosed);
+            if (oc) oc.addEventListener('change', function () { document.getElementById('onlineNextWrap').style.display = oc.value === 'true' ? 'none' : ''; });
+
             var q = document.getElementById('q'), rows = document.querySelectorAll('#tbl tbody tr');
             if (!q) return;
             q.addEventListener('input', function () {

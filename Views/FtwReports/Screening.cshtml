@@ -87,7 +87,8 @@
     @if (clinic)
     {
         <text>Hasil Pemeriksaan, Tindakan, dan Rekomendasi diambil dari kunjungan klinik dalam 48 jam setelah mengisi: <strong>hasil pemeriksaan</strong> = diagnosa dan hasil pemeriksaan, <strong>tindakan</strong> = obat dan catatan klinik, <strong>rekomendasi</strong> = rekomendasi klinik. Kosong berarti belum ada kunjungan klinik.
-        <strong>@Model.Diperiksa</strong> dari <strong>@Model.Total</strong> kejadian sudah diperiksa.</text>
+        <strong>Status kasus</strong>: <em>Selesai</em> = sudah diperiksa klinik atau follow up online ditutup; <em>Belum close</em> = belum ditindaklanjuti atau follow up online masih berjalan (masalah belum selesai).
+        <strong>@Model.Diperiksa</strong> dari <strong>@Model.Total</strong> kejadian sudah diperiksa; <strong class="text-danger">@Model.BelumClose</strong> belum close.</text>
     }
     else
     {
@@ -118,6 +119,7 @@
                             <th rowspan="2">HASIL PEMERIKSAAN</th>
                             <th rowspan="2">TINDAKAN</th>
                             <th rowspan="2">REKOMENDASI</th>
+                            <th rowspan="2">STATUS KASUS</th>
                         }
                     </tr>
                     <tr>
@@ -145,12 +147,13 @@
                                 <td class="res pre">@x.HasilPemeriksaan</td>
                                 <td class="res pre">@x.Tindakan</td>
                                 <td class="res">@x.RekomendasiText</td>
+                                <td class="res"><span class="badge @(x.Close ? "bg-success" : "bg-danger")">@(x.Close ? "Selesai" : "Belum close")</span><div class="small">@x.StatusDetail</div></td>
                             }
                         </tr>
                     }
                     @if (Model.Rows.Count == 0)
                     {
-                        <tr><td colspan="@(clinic ? 14 : 11)" class="text-muted py-4">Tidak ada karyawan tidak fit pada periode ini.</td></tr>
+                        <tr><td colspan="@(clinic ? 15 : 11)" class="text-muted py-4">Tidak ada karyawan tidak fit pada periode ini.</td></tr>
                     }
                 </tbody>
             </table>
