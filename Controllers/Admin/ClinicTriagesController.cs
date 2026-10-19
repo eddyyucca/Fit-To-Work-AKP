@@ -5,6 +5,7 @@ using FitToWorkApp.Security;
 using FitToWorkApp.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace FitToWorkApp.Controllers.Admin
 {
@@ -79,6 +80,17 @@ namespace FitToWorkApp.Controllers.Admin
             _employeeRepository = employeeRepository;
             _permissions = permissions;
             _clock = clock;
+        }
+
+        // Migrasi (dbo.ClinicTriages) belum dijalankan di database: tampilkan penjelasan, bukan halaman error
+        public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+        {
+            if (!await _repo.IsAvailableAsync())
+            {
+                context.Result = View("NotReady");
+                return;
+            }
+            await next();
         }
 
         // ============================ Daftar ============================

@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Data.SqlClient;
 using FitToWorkApp.Data;
 using FitToWorkApp.Models;
 
@@ -21,6 +22,9 @@ namespace FitToWorkApp.Repositories
 
     public interface IClinicTriageRepository
     {
+        /// <summary>False kalau tabel dbo.ClinicTriages belum dibuat di database (migration_clinic_triage.sql belum dijalankan).</summary>
+        Task<bool> IsAvailableAsync();
+
         Task<int> CreateAsync(ClinicTriage t);
 
         /// <summary>Ubah draft. Hanya yang masih Draft; melempar <see cref="TriageStateException"/> kalau sudah bukan draft.</summary>
@@ -45,6 +49,17 @@ namespace FitToWorkApp.Repositories
         public ClinicTriageRepository(IDbConnectionFactory connectionFactory)
         {
             _connectionFactory = connectionFactory;
+        }
+
+        // 207 = kolom tidak ada, 208 = tabel tidak ada. Halaman lain (mis. Kunjungan Klinik) memanggil repository ini hanya untuk
+        // info tambahan; kalau migrasi belum dijalankan, halaman itu tidak boleh ikut error.
+        private static bool IsMissing(SqlException ex) => ex.Number is 207 or 208;
+
+        public async Task<bool> IsAvailableAsync()
+        {
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.ExecuteScalarAsync<int>(
+                "SELECT CASE WHEN OBJECT_ID('dbo.ClinicTriages', 'U') IS NOT NULL THEN 1 ELSE 0 END") == 1;
         }
 
         public async Task<int> CreateAsync(ClinicTriage t)
@@ -86,50 +101,78 @@ namespace FitToWorkApp.Repositories
 
         public async Task<ClinicTriage?> GetByVisitIdAsync(int visitId)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            return await conn.QueryFirstOrDefaultAsync<ClinicTriage>(@"
-                SELECT TOP 1 t.*, e.NIP FROM dbo.ClinicTriages t
-                INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
-                WHERE t.VisitId = @VisitId", new { VisitId = visitId });
+            try
+            {
+                using var conn = _connectionFactory.CreateConnection();
+                return await conn.QueryFirstOrDefaultAsync<ClinicTriage>(@"
+                    SELECT TOP 1 t.*, e.NIP FROM dbo.ClinicTriages t
+                    INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
+                    WHERE t.VisitId = @VisitId", new { VisitId = visitId });
+            }
+            catch (SqlException ex) when (IsMissing(ex))
+            {
+                return null;
+            }
         }
 
         public async Task<ClinicTriage?> GetActiveByFtwSubmissionAsync(int ftwSubmissionId)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            return await conn.QueryFirstOrDefaultAsync<ClinicTriage>(@"
-                SELECT TOP 1 t.*, e.NIP FROM dbo.ClinicTriages t
-                INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
-                WHERE t.FtwSubmissionId = @Id AND t.Status IN ('Draft', 'Selesai')
-                ORDER BY t.Id DESC", new { Id = ftwSubmissionId });
+            try
+            {
+                using var conn = _connectionFactory.CreateConnection();
+                return await conn.QueryFirstOrDefaultAsync<ClinicTriage>(@"
+                    SELECT TOP 1 t.*, e.NIP FROM dbo.ClinicTriages t
+                    INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
+                    WHERE t.FtwSubmissionId = @Id AND t.Status IN ('Draft', 'Selesai')
+                    ORDER BY t.Id DESC", new { Id = ftwSubmissionId });
+            }
+            catch (SqlException ex) when (IsMissing(ex))
+            {
+                return null;
+            }
         }
 
         public async Task<List<ClinicTriage>> GetListAsync(ClinicTriageQuery q)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var search = string.IsNullOrWhiteSpace(q.Search) ? null : q.Search.Trim();
-            var sql = @"
-                SELECT TOP (@Take) t.*, e.NIP
-                FROM dbo.ClinicTriages t
-                INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
-                WHERE (@Status IS NULL OR t.Status = @Status)
-                  AND (@FromUtc IS NULL OR t.TriageAt >= @FromUtc)
-                  AND (@ToUtc IS NULL OR t.TriageAt < @ToUtc)
-                  AND (@Search IS NULL OR t.NamaSnapshot LIKE '%' + @Search + '%' OR e.NIP LIKE '%' + @Search + '%' OR t.Keluhan LIKE '%' + @Search + '%')
-                ORDER BY CASE WHEN t.Status = 'Draft' THEN 0 ELSE 1 END, t.TriageAt DESC";
-            return (await conn.QueryAsync<ClinicTriage>(sql, new
+            try
             {
-                q.Take,
-                Status = string.IsNullOrWhiteSpace(q.Status) ? null : q.Status,
-                q.FromUtc,
-                q.ToUtc,
-                Search = search
-            })).ToList();
+                using var conn = _connectionFactory.CreateConnection();
+                var search = string.IsNullOrWhiteSpace(q.Search) ? null : q.Search.Trim();
+                var sql = @"
+                    SELECT TOP (@Take) t.*, e.NIP
+                    FROM dbo.ClinicTriages t
+                    INNER JOIN dbo.Employees e ON e.Id = t.EmployeeId
+                    WHERE (@Status IS NULL OR t.Status = @Status)
+                      AND (@FromUtc IS NULL OR t.TriageAt >= @FromUtc)
+                      AND (@ToUtc IS NULL OR t.TriageAt < @ToUtc)
+                      AND (@Search IS NULL OR t.NamaSnapshot LIKE '%' + @Search + '%' OR e.NIP LIKE '%' + @Search + '%' OR t.Keluhan LIKE '%' + @Search + '%')
+                    ORDER BY CASE WHEN t.Status = 'Draft' THEN 0 ELSE 1 END, t.TriageAt DESC";
+                return (await conn.QueryAsync<ClinicTriage>(sql, new
+                {
+                    q.Take,
+                    Status = string.IsNullOrWhiteSpace(q.Status) ? null : q.Status,
+                    q.FromUtc,
+                    q.ToUtc,
+                    Search = search
+                })).ToList();
+            }
+            catch (SqlException ex) when (IsMissing(ex))
+            {
+                return new List<ClinicTriage>();
+            }
         }
 
         public async Task<int> CountDraftAsync()
         {
-            using var conn = _connectionFactory.CreateConnection();
-            return await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.ClinicTriages WHERE Status = 'Draft'");
+            try
+            {
+                using var conn = _connectionFactory.CreateConnection();
+                return await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.ClinicTriages WHERE Status = 'Draft'");
+            }
+            catch (SqlException ex) when (IsMissing(ex))
+            {
+                return 0;
+            }
         }
 
         public async Task CancelAsync(int id, string reason, string adminName)
